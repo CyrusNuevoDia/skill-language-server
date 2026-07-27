@@ -1,5 +1,11 @@
 # skill-language-server
 
+## 0.4.0
+
+### Minor Changes
+
+- [`0ae18d0`](https://github.com/CyrusNuevoDia/skill-language-server/commit/0ae18d049a1090f0287e26ef818ef4555b32c1f5) Thanks [@CyrusNuevoDia](https://github.com/CyrusNuevoDia)! - Skill names now support `_` and plugin-style `:` separators (e.g. `/data_sync`, `/report:weekly`). Separators can't lead, trail, or double, so a trailing colon in prose ("use /ship: then…") stays prose.
+
 ## 0.3.0
 
 ### Minor Changes
