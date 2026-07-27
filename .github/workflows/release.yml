@@ -14,7 +14,6 @@ concurrency:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-  NODE_VERSION: "24"
 
 jobs:
   changes:
@@ -80,8 +79,10 @@ jobs:
         name: checkout
         with:
           fetch-depth: 0
-      - uses: oven-sh/setup-bun@v2
-        name: setup[bun]
+      - uses: jdx/mise-action@v2
+        name: setup[mise]
+        with:
+          install_args: bun
       - name: check
         run: bun scripts/check-release-changeset.ts
 
@@ -97,16 +98,10 @@ jobs:
         name: checkout
         with:
           fetch-depth: 0
-      - uses: oven-sh/setup-bun@v2
-        name: setup[bun]
-      - uses: actions/setup-node@v6
-        name: setup[node]
+      - uses: jdx/mise-action@v2
+        name: setup[mise]
         with:
-          node-version: ${{ env.NODE_VERSION }}
-      - uses: extractions/setup-just@v4
-        name: setup[just]
-        with:
-          just-version: "1.40.0"
+          install_args: bun just
       - name: setup[npm]
         run: |
           mkdir -p "$RUNNER_TEMP/npm-wrapper"
@@ -124,7 +119,7 @@ jobs:
       - name: check
         run: just check
       - name: test
-        run: bun test
+        run: just test
       - name: version
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -160,6 +155,7 @@ jobs:
             exit 0
           fi
 
+          just build-server
           npm pack --dry-run --json
           bun changeset publish
           release_version="skill-language-server@$version"

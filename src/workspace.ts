@@ -231,7 +231,7 @@ export class Workspace {
           message: `Unknown skill "${token.name}". Did you mean "${near}"?`,
           range: token.nameRange,
           severity: DiagnosticSeverity.Warning,
-          source: "skill-lsp",
+          source: "skill-language-server",
         })
       }
     }
@@ -244,7 +244,7 @@ export class Workspace {
           start: { character: 0, line: 0 },
         },
         severity: DiagnosticSeverity.Error,
-        source: "skill-lsp",
+        source: "skill-language-server",
       })
     }
 
@@ -255,7 +255,7 @@ export class Workspace {
           message: `Frontmatter name "${name}" does not match folder name "${entry.skillFolder}".`,
           range: nameRange,
           severity: DiagnosticSeverity.Error,
-          source: "skill-lsp",
+          source: "skill-language-server",
         })
       }
       const twins = this.skills.get(entry.skillFolder) ?? []
@@ -268,7 +268,7 @@ export class Workspace {
           )}.`,
           range: nameRange,
           severity: DiagnosticSeverity.Error,
-          source: "skill-lsp",
+          source: "skill-language-server",
         })
       }
     }

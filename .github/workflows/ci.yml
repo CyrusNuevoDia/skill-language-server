@@ -2,6 +2,7 @@ name: ci
 
 on:
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.head_ref || github.ref }}
@@ -9,7 +10,6 @@ concurrency:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-  NODE_VERSION: "24"
 
 jobs:
   check:
@@ -19,16 +19,10 @@ jobs:
         name: checkout
         with:
           fetch-depth: 0
-      - uses: oven-sh/setup-bun@v2
-        name: setup[bun]
-      - uses: actions/setup-node@v6
-        name: setup[node]
+      - uses: jdx/mise-action@v2
+        name: setup[mise]
         with:
-          node-version: ${{ env.NODE_VERSION }}
-      - uses: extractions/setup-just@v4
-        name: setup[just]
-        with:
-          just-version: "1.40.0"
+          install_args: bun just
       - name: deps
         run: bun install --frozen-lockfile
       - name: deps[vscode]
@@ -36,4 +30,4 @@ jobs:
       - name: check
         run: just check
       - name: test
-        run: bun test
+        run: just test

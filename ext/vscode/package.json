@@ -1,6 +1,6 @@
 {
-  "name": "skill-lsp",
-  "displayName": "Skill LSP",
+  "name": "skill-language-server",
+  "displayName": "Skill Language Server",
   "description": "Go-to-definition, find-references, and cross-file rename for agent skill files (SKILL.md)",
   "version": "0.0.1",
   "publisher": "cyrusnuevodia",

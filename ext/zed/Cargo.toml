@@ -1,5 +1,5 @@
 [package]
-name = "zed_skill_lsp"
+name = "zed_skill_language_server"
 version = "0.0.1"
 edition = "2021"
 publish = false

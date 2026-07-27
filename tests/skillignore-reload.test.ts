@@ -11,7 +11,7 @@ import { Client, WORKSPACE } from "./harness"
 let root: string
 let c: Client
 beforeAll(async () => {
-  root = mkdtempSync(join(tmpdir(), "skill-lsp-reload-"))
+  root = mkdtempSync(join(tmpdir(), "skill-language-server-reload-"))
   cpSync(WORKSPACE, root, { recursive: true })
   c = await Client.start(root)
 })

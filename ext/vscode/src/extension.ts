@@ -21,8 +21,8 @@ export function activate(context: ExtensionContext): void {
     documentSelector: [{ language: "markdown", scheme: "file" }],
   }
   client = new LanguageClient(
-    "skill-lsp",
-    "Skill LSP",
+    "skill-language-server",
+    "Skill Language Server",
     serverOptions,
     clientOptions
   )

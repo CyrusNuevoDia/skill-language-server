@@ -25,11 +25,11 @@ Tools come from mise (`mise trust && mise install` on first checkout).
 | `just check` | tsc (root + vscode-extension) + ultracite lint |
 | `just fmt` | ultracite fix --unsafe — ALWAYS use this instead of fixing format/lint complaints by hand |
 | `just build` | All artifacts into dist/: standalone binary, VS Code .vsix, Zed wasm |
-| `just bin` | Build + install server binary to ~/.local/bin/skill-lsp (what Zed launches) |
+| `just bin` | Build + install server binary to ~/.local/bin/skill-language-server (what Zed launches) |
 
 Verifier = `bun install` + `just check` + `bun test` all clean. Run it before
 declaring anything done. After server changes, refresh installed clients:
-`just bin` (Zed) and `just build && code --install-extension dist/skill-lsp.vsix`
+`just bin` (Zed) and `just build && code --install-extension dist/skill-language-server.vsix`
 (VS Code).
 
 TypeScript is v7 (native compiler): `@types/*` packages must be listed
@@ -47,12 +47,13 @@ Three server modules in `src/`, each a layer:
 - **workspace.ts** — the index. Walks the workspace once (`scan()`), keyed maps
   `files` (by URI) and `skills` (by name, array-valued to track duplicates).
   Scope rule lives in `inScope()`: a file is indexed iff its path contains a
-  `.claude`, `.agents`, `.codex`, or `skills` segment AND is not matched by a
-  workspace-root `.skillignore` (gitignore syntax; re-read on scan, so changes
-  need a language-server restart). This repo's own `.skillignore` excludes
-  `tests/fixtures/` so fixture skills don't pollute editors opening this repo. Skill identity is the
-  FOLDER name; frontmatter `name:` disagreeing is a diagnostic, not an alias.
-  All reported ranges cover the name part only, never the sigil.
+  `.claude`, `.agents`, `.codex`, or `skills` segment (or is named CLAUDE.md /
+  AGENTS.md) AND is not matched by a workspace-root `.skillignore` (gitignore
+  syntax; live-reloaded via the file watcher). This repo's own `.skillignore`
+  excludes `tests/fixtures/` so fixture skills don't pollute editors opening
+  this repo. Skill identity is the FOLDER name; frontmatter `name:` disagreeing
+  is a diagnostic, not an alias. All reported ranges cover the name part only,
+  never the sigil.
 - **server.ts** — LSP wiring only; no logic that isn't protocol shaped. Rename
   emits text edits BEFORE the folder `RenameFile` (clients apply sequentially;
   the frontmatter edit targets a file inside the folder being renamed).
@@ -73,8 +74,8 @@ Distribution targets in `ext/` (thin shims around the same server):
 
 - `ext/vscode/` — bundles the server INTO the .vsix (dist/server.js),
   spawns it over IPC. Attaches to all markdown; the server self-filters.
-- `ext/zed/` — Rust/WASM shim that launches `skill-lsp` from PATH
+- `ext/zed/` — Rust/WASM shim that launches `skill-language-server` from PATH
   (falls back to ~/.local/bin). Installed as a dev extension via
   `zed: install dev extension`.
-- `ext/nvim/` — plain Lua plugin for Neovim 0.11+ (`lsp/skill-lsp.lua` +
+- `ext/nvim/` — plain Lua plugin for Neovim 0.11+ (`lsp/skill-language-server.lua` +
   `vim.lsp.enable`); expects the `just bin` binary on PATH.

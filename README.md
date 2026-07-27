@@ -1,11 +1,11 @@
-# skill-lsp
+# skill-language-server
 
 [![npm](https://img.shields.io/npm/v/skill-language-server)](https://www.npmjs.com/package/skill-language-server)
 [![CI](https://github.com/CyrusNuevoDia/skill-language-server/actions/workflows/ci.yml/badge.svg)](https://github.com/CyrusNuevoDia/skill-language-server/actions/workflows/ci.yml)
 
 **Rename an agent skill once — the folder, the frontmatter, and every reference across your workspace update together.** A language server for SKILL.md files. Works in VS Code, Zed, Neovim, and Helix.
 
-Agent skills are markdown files that reference each other — `/ship`, `$verify` (the sigil varies by agent; both mean the same thing) — from other skills, `CLAUDE.md`/`AGENTS.md` memory files, and agent definitions. That's a real dependency graph with all the refactoring hazards of code and none of the tooling: rename a skill by hand and you're editing a folder name, a `name:` field, and every reference that mentions it, hoping you found them all. skill-lsp gives skill files the ergonomics TypeScript gives symbols:
+Agent skills are markdown files that reference each other — `/ship`, `$verify` (the sigil varies by agent; both mean the same thing) — from other skills, `CLAUDE.md`/`AGENTS.md` memory files, and agent definitions. That's a real dependency graph with all the refactoring hazards of code and none of the tooling: rename a skill by hand and you're editing a folder name, a `name:` field, and every reference that mentions it, hoping you found them all. skill-language-server gives skill files the ergonomics TypeScript gives symbols:
 
 - **Rename** (`F2`) — one `WorkspaceEdit` renames the skill folder, the frontmatter `name:` value, and every reference, applied by your editor as a single undo step. Works from a reference token, from the frontmatter, or by renaming the folder in your file explorer.
 - **Go to definition** — cmd-click `/skill-name` jumps to its SKILL.md.
@@ -16,14 +16,14 @@ Agent skills are markdown files that reference each other — `/ship`, `$verify`
 
 It stays quiet where markdown demands it: fenced code blocks are never parsed — no references, no diagnostics, no completion popups (indented code blocks aren't detected; use fences). Multi-segment paths like `/usr/bin` and uppercase shell vars like `$PATH` are never references, and completion follows the same boundary rules, so typing `docs/` won't pop the skill list. Inline code spans *do* count — that's how people write skill names in prose — and unknown names produce nothing.
 
-skill-lsp is a language server, not a linter — pair it with `skill-lint` or `agnix` if you also want structural/security linting for your skills.
+skill-language-server is a language server, not a linter — pair it with `skill-lint` or `agnix` if you also want structural/security linting for your skills.
 
 ## Install
 
 The server for Zed, Neovim, and Helix:
 
 ```sh
-npm install -g skill-language-server   # puts the `skill-lsp` binary on your PATH
+npm install -g skill-language-server   # puts the `skill-language-server` binary on your PATH
 ```
 
 Or from a clone of this repo:
@@ -31,7 +31,7 @@ Or from a clone of this repo:
 ```sh
 mise trust && mise install   # toolchain: bun, just (rust too, used only for the Zed wasm)
 bun install                  # project dependencies
-just bin                     # → ~/.local/bin/skill-lsp; keep that on your PATH
+just bin                     # → ~/.local/bin/skill-language-server; keep that on your PATH
 ```
 
 VS Code needs neither: its extension bundles the server.
@@ -40,7 +40,7 @@ VS Code needs neither: its extension bundles the server.
 
 ```sh
 just build-vscode
-code --install-extension dist/skill-lsp.vsix
+code --install-extension dist/skill-language-server.vsix
 ```
 
 ### Zed
@@ -51,22 +51,22 @@ One-time: command palette → `zed: install dev extension` → select `ext/zed/`
 
 ```lua
 -- lazy.nvim
-{ dir = "/path/to/skill-lsp/ext/nvim" }
+{ dir = "/path/to/skill-language-server/ext/nvim" }
 ```
 
-Or copy `ext/nvim/lsp/skill-lsp.lua` into `~/.config/nvim/lsp/` and add `vim.lsp.enable("skill-lsp")` to your init.lua.
+Or copy `ext/nvim/lsp/skill-language-server.lua` into `~/.config/nvim/lsp/` and add `vim.lsp.enable("skill-language-server")` to your init.lua.
 
 ### Helix
 
 ```toml
 # languages.toml
-[language-server.skill-lsp]
-command = "skill-lsp"
+[language-server.skill-language-server]
+command = "skill-language-server"
 args = ["--stdio"]
 
 [[language]]
 name = "markdown"
-language-servers = ["skill-lsp"]  # add e.g. "marksman" here if you use it
+language-servers = ["skill-language-server"]  # add e.g. "marksman" here if you use it
 ```
 
 ## How it scans

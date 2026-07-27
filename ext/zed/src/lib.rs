@@ -1,8 +1,8 @@
 use zed_extension_api::{self as zed, Result};
 
-struct SkillLspExtension;
+struct SkillLanguageServerExtension;
 
-impl zed::Extension for SkillLspExtension {
+impl zed::Extension for SkillLanguageServerExtension {
     fn new() -> Self {
         Self
     }
@@ -12,8 +12,8 @@ impl zed::Extension for SkillLspExtension {
         _language_server_id: &zed::LanguageServerId,
         worktree: &zed::Worktree,
     ) -> Result<zed::Command> {
-        let command = worktree.which("skill-lsp").ok_or_else(|| {
-            "skill-lsp not found on PATH — run `just bin` and make sure ~/.local/bin is on your PATH".to_string()
+        let command = worktree.which("skill-language-server").ok_or_else(|| {
+            "skill-language-server not found on PATH — run `just bin` and make sure ~/.local/bin is on your PATH".to_string()
         })?;
         Ok(zed::Command {
             command,
@@ -23,4 +23,4 @@ impl zed::Extension for SkillLspExtension {
     }
 }
 
-zed::register_extension!(SkillLspExtension);
+zed::register_extension!(SkillLanguageServerExtension);
