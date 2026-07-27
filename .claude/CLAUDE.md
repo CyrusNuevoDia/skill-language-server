@@ -40,9 +40,9 @@ explicitly in each tsconfig's `"types"` field — they are not auto-discovered.
 Three server modules in `src/`, each a layer:
 
 - **parse.ts** — pure text → `{frontmatter, tokens}`. Owns the token grammar:
-  `[/$]` + `[a-z0-9_]` segments joined by single `-` or `:` (separators never
-  lead/trail/double), rejected when preceded by a word/path/scheme char or
-  followed by `/` (so `/usr/bin`, `$PATH`, and `https://x` never match). Fenced code blocks are skipped;
+  `[/$]` + `[a-z0-9_]` segments joined by runs of `-` or `:` (separators may
+  repeat but never lead/trail), rejected when preceded by a word/path/scheme
+  char or followed by `/` (so `/usr/bin`, `$PATH`, `https://x` never match). Fenced code blocks are skipped;
   inline code spans are NOT (people write `` `/skill` `` in prose). Frontmatter
   ranges point at the `name:` value so diagnostics/renames target it exactly.
 - **workspace.ts** — the index. Walks the workspace once (`scan()`), keyed maps

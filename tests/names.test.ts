@@ -110,11 +110,13 @@ test("rename to a colon name renames the folder and references", async () => {
   expect(edits.every((e) => e.newText === "report:monthly")).toBe(true)
 })
 
-test("rename rejects malformed separator runs and uppercase", async () => {
+test("separator runs are valid names; leading/trailing separators are not", async () => {
   const pos = posOf(".claude/team.md", "/data_sync", { offset: 4 })
-  await expect(c.rename(".claude/team.md", pos, "a::b")).rejects.toThrow()
+  await expect(c.rename(".claude/team.md", pos, "a::b")).resolves.toBeTruthy()
+  await expect(c.rename(".claude/team.md", pos, "x--y_z")).resolves.toBeTruthy()
   await expect(c.rename(".claude/team.md", pos, "Data:Sync")).rejects.toThrow()
   await expect(c.rename(".claude/team.md", pos, "-leading")).rejects.toThrow()
+  await expect(c.rename(".claude/team.md", pos, "trailing:")).rejects.toThrow()
 })
 
 test("completion offers underscore and colon names", async () => {
