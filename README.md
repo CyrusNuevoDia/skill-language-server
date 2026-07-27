@@ -20,7 +20,7 @@ skill-lsp is a language server, not a linter — pair it with `skill-lint` or `a
 The server for Zed, Neovim, and Helix:
 
 ```sh
-npm install -g skill-lsp     # puts `skill-lsp` on your PATH
+npm install -g skill-language-server   # puts the `skill-lsp` binary on your PATH
 ```
 
 Or from a clone of this repo:

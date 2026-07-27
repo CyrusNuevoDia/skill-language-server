@@ -1,5 +1,5 @@
 {
-  "name": "skill-lsp",
+  "name": "skill-language-server",
   "version": "0.1.0",
   "description": "Language server for agent skill files (SKILL.md): go-to-definition, find-references, cross-file rename, diagnostics, completion",
   "keywords": [

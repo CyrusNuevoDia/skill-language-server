@@ -3,10 +3,7 @@ set shell := ["bash", "-cu"]
 default: build
 
 # Build everything into dist/: server binary, VS Code .vsix, Zed wasm, npm bin
-build: build-server build-vscode build-zed build-npm
-
-# Node-runnable bundle with shebang — what `npx skill-lsp` executes
-build-npm:
+build: build-server build-vscode build-zed
     bun run build:npm
 
 # Standalone server binary (used by Zed and any stdio client)
