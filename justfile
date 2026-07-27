@@ -24,8 +24,12 @@ build-zed:
     cd ext/zed && cargo build --release --target wasm32-wasip2
     cp ext/zed/target/wasm32-wasip2/release/zed_skill_lsp.wasm dist/
 
-# Build and install the server binary to ~/.local/bin (used by Zed)
+# Build and install the server binary to ~/.local/bin (used by Zed).
+# rm first: overwriting a signed macOS binary in place trips the kernel's
+# signature cache and the new binary gets SIGKILLed on launch.
 bin: build-server
+    mkdir -p ~/.local/bin
+    rm -f ~/.local/bin/skill-lsp
     cp dist/skill-lsp ~/.local/bin/skill-lsp
 
 test:
