@@ -1,5 +1,11 @@
 # skill-language-server
 
+## 0.4.1
+
+### Patch Changes
+
+- [`7f8d8c9`](https://github.com/CyrusNuevoDia/skill-language-server/commit/7f8d8c9374d97a6fefca0f930c10bd076f0c40a5) Thanks [@CyrusNuevoDia](https://github.com/CyrusNuevoDia)! - Separator runs are valid inside skill names (`a::b`, `x--y`); separators still can't lead or trail.
+
 ## 0.4.0
 
 ### Minor Changes
