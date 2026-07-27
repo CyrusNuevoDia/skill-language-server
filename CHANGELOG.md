@@ -1,5 +1,11 @@
 # skill-language-server
 
+## 0.4.2
+
+### Patch Changes
+
+- [`220544a`](https://github.com/CyrusNuevoDia/skill-language-server/commit/220544a242270f2339491822ee5942283cf96b9a) Thanks [@CyrusNuevoDia](https://github.com/CyrusNuevoDia)! - Internal refactors: arktype/arkregex validation and shared utils extraction
+
 ## 0.4.1
 
 ### Patch Changes
