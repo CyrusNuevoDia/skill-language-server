@@ -1,5 +1,11 @@
 # skill-language-server
 
+## 0.3.0
+
+### Minor Changes
+
+- [`84927d9`](https://github.com/CyrusNuevoDia/skill-language-server/commit/84927d9de6ffd7812c70fadf3386835dd1a412c6) Thanks [@CyrusNuevoDia](https://github.com/CyrusNuevoDia)! - Rename the binary and all identifiers from `skill-lsp` to `skill-language-server`, require Node >= 24, move all package scripts into the justfile, and run CI through mise + just.
+
 ## 0.2.0
 
 ### Minor Changes
