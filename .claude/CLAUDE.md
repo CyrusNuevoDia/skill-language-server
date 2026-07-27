@@ -19,13 +19,13 @@ itself changes, stated out loud, never to make an implementation pass.
 
 Tools come from mise (`mise trust && mise install` on first checkout).
 
-| Command | What |
-| --- | --- |
-| `bun test` | Full suite; single file: `bun test tests/rename.test.ts`; single test: `bun test -t "rename rejects"` |
-| `just check` | tsc (root + vscode-extension) + ultracite lint |
-| `just fmt` | ultracite fix --unsafe — ALWAYS use this instead of fixing format/lint complaints by hand |
-| `just build` | All artifacts into dist/: standalone binary, VS Code .vsix, Zed wasm |
-| `just bin` | Build + install server binary to ~/.local/bin/skill-language-server (what Zed launches) |
+| Command      | What                                                                                                  |
+| ------------ | ----------------------------------------------------------------------------------------------------- |
+| `bun test`   | Full suite; single file: `bun test tests/rename.test.ts`; single test: `bun test -t "rename rejects"` |
+| `just check` | tsc (root + vscode-extension) + ultracite lint                                                        |
+| `just fmt`   | ultracite fix --unsafe — ALWAYS use this instead of fixing format/lint complaints by hand             |
+| `just build` | All artifacts into dist/: standalone binary, VS Code .vsix, Zed wasm                                  |
+| `just bin`   | Build + install server binary to ~/.local/bin/skill-language-server (what Zed launches)               |
 
 Verifier = `bun install` + `just check` + `bun test` all clean. Run it before
 declaring anything done. After server changes, refresh installed clients:
@@ -55,7 +55,7 @@ Three server modules in `src/`, each a layer:
   this repo. Skill identity is the FOLDER name; frontmatter `name:` disagreeing
   is a diagnostic, not an alias. All reported ranges cover the name part only,
   never the sigil. Unresolved `/references` get info-level hints, near misses
-  (edit distance ≤ 2) upgrade to *did you mean* warnings; builtin CLI command
+  (edit distance ≤ 2) upgrade to _did you mean_ warnings; builtin CLI command
   names (`src/builtins.ts`) and workspace `.claude/commands`/`.codex/prompts`
   names are exempt from both; `$` tokens get near-miss warnings but never the
   info hint.
@@ -80,8 +80,10 @@ Distribution targets in `ext/` (thin shims around the same server):
 
 - `ext/vscode/` — bundles the server INTO the .vsix (dist/server.js),
   spawns it over IPC. Attaches to all markdown; the server self-filters.
-- `ext/zed/` — Rust/WASM shim that launches `skill-language-server` from PATH
-  (falls back to ~/.local/bin). Installed as a dev extension via
-  `zed: install dev extension`.
+- `ext/zed/` — Rust/WASM shim. Prefers `skill-language-server` on PATH (the
+  `just bin` dev workflow); otherwise auto-installs the npm package into the
+  extension's work dir and runs it on Zed's bundled Node (needs engines
+  `>=22`, which Zed's runtime satisfies — don't tighten it). Installed as a
+  dev extension via `zed: install dev extension`.
 - `ext/nvim/` — plain Lua plugin for Neovim 0.11+ (`lsp/skill-language-server.lua` +
   `vim.lsp.enable`); expects the `just bin` binary on PATH.
