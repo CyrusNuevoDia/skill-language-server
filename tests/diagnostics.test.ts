@@ -8,17 +8,45 @@ beforeAll(async () => {
 })
 afterAll(() => c.stop())
 
-test("near-miss reference gets a did-you-mean warning; unknown tokens stay quiet", async () => {
+test("near-miss reference gets a did-you-mean warning; other unknown references get an info hint", async () => {
   const diags = await c.diagnosticsFor(".claude/skills/typo-source/SKILL.md")
-  expect(diags).toHaveLength(1)
-  const [d] = diags
-  expect(d.severity).toBe(DiagnosticSeverity.Warning)
-  expect(d.message).toContain("shipping")
-  expect(d.range).toEqual(
+  expect(diags).toHaveLength(2)
+
+  const warning = diags.find((d) => d.severity === DiagnosticSeverity.Warning)
+  expect(warning?.message).toContain("shipping")
+  expect(warning?.range).toEqual(
     rangeOf(".claude/skills/typo-source/SKILL.md", "/shiping", {
       length: 7,
       offset: 1,
     })
+  )
+
+  const info = diags.find((d) => d.severity === DiagnosticSeverity.Information)
+  expect(info?.message).toContain("completely-unknown")
+  expect(info?.range).toEqual(
+    rangeOf(".claude/skills/typo-source/SKILL.md", "/completely-unknown", {
+      length: 18,
+      offset: 1,
+    })
+  )
+})
+
+test("builtin command names produce no diagnostics, even as near-misses of real skills", async () => {
+  expect(await c.diagnosticsFor(".claude/builtins.md")).toEqual([])
+})
+
+test("commands defined by .claude/commands or .codex/prompts files produce no diagnostics", async () => {
+  expect(await c.diagnosticsFor(".claude/custom-commands.md")).toEqual([])
+})
+
+test("dollar sigils skip the builtin list but never get the unknown-reference hint", async () => {
+  const diags = await c.diagnosticsFor(".claude/sigils.md")
+  expect(diags).toHaveLength(1)
+  const [d] = diags
+  expect(d.severity).toBe(DiagnosticSeverity.Warning)
+  expect(d.message).toContain("modal")
+  expect(d.range).toEqual(
+    rangeOf(".claude/sigils.md", "$model", { length: 5, offset: 1 })
   )
 })
 

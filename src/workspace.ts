@@ -10,6 +10,7 @@ import {
   type Location,
   type Position,
 } from "vscode-languageserver"
+import { BUILTIN_COMMANDS } from "./builtins"
 import { type Frontmatter, NAME_PATTERN, parseDoc, type Token } from "./parse"
 import { containsPos, distance, rangeIn, uriOf, ZERO_RANGE } from "./utils"
 
@@ -209,12 +210,42 @@ export class Workspace {
     return decl ? this.skillOf(decl) : undefined
   }
 
+  /** Names defined as custom commands: `.claude/commands/<name>.md` or `.codex/prompts/<name>.md`. */
+  private commandNames(): Set<string> {
+    const out = new Set<string>()
+    for (const { path } of this.files.values()) {
+      const parent = basename(dirname(path))
+      const grandparent = basename(dirname(dirname(path)))
+      if (
+        (parent === "commands" && grandparent === ".claude") ||
+        (parent === "prompts" && grandparent === ".codex")
+      ) {
+        out.add(basename(path, ".md"))
+      }
+    }
+    return out
+  }
+
   diagnosticsFor(entry: FileEntry): Diagnostic[] {
+    return [
+      ...this.referenceDiagnostics(entry),
+      ...this.declarationDiagnostics(entry),
+    ]
+  }
+
+  private referenceDiagnostics(entry: FileEntry): Diagnostic[] {
     const out: Diagnostic[] = []
+    const commands = this.commandNames()
 
     for (const token of entry.tokens) {
       if (this.skills.has(token.name)) {
         continue
+      }
+      if (
+        token.sigil === "/" &&
+        (BUILTIN_COMMANDS.has(token.name) || commands.has(token.name))
+      ) {
+        continue // a command, not a skill — never diagnosed
       }
       const near = minBy(
         [...this.skills.keys()].filter((k) => distance(token.name, k) <= 2),
@@ -227,8 +258,22 @@ export class Workspace {
           severity: DiagnosticSeverity.Warning,
           source: "skill-language-server",
         })
+      } else if (token.sigil === "/") {
+        // Dollar tokens stay quiet: prose like `$5` or `$my_var` matches the
+        // grammar, and an info hint on every one would drown real signal.
+        out.push({
+          message: `Unknown skill "${token.name}".`,
+          range: token.nameRange,
+          severity: DiagnosticSeverity.Information,
+          source: "skill-language-server",
+        })
       }
     }
+    return out
+  }
+
+  private declarationDiagnostics(entry: FileEntry): Diagnostic[] {
+    const out: Diagnostic[] = []
 
     if (entry.skillFolder && !entry.frontmatter?.nameRange) {
       out.push({

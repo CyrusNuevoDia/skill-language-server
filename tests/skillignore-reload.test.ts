@@ -19,7 +19,7 @@ afterAll(() => c.stop())
 
 test("adding a path to .skillignore clears its on-screen diagnostics", async () => {
   const typoRel = ".claude/skills/typo-source/SKILL.md"
-  expect(await c.diagnosticsFor(typoRel)).toHaveLength(1)
+  expect(await c.diagnosticsFor(typoRel)).toHaveLength(2)
 
   writeFileSync(
     join(root, ".skillignore"),

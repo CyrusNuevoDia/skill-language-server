@@ -54,7 +54,11 @@ Three server modules in `src/`, each a layer:
   excludes `tests/fixtures/` so fixture skills don't pollute editors opening
   this repo. Skill identity is the FOLDER name; frontmatter `name:` disagreeing
   is a diagnostic, not an alias. All reported ranges cover the name part only,
-  never the sigil.
+  never the sigil. Unresolved `/references` get info-level hints, near misses
+  (edit distance ≤ 2) upgrade to *did you mean* warnings; builtin CLI command
+  names (`src/builtins.ts`) and workspace `.claude/commands`/`.codex/prompts`
+  names are exempt from both; `$` tokens get near-miss warnings but never the
+  info hint.
 - **server.ts** — LSP wiring only; no logic that isn't protocol shaped. Rename
   emits text edits BEFORE the folder `RenameFile` (clients apply sequentially;
   the frontmatter edit targets a file inside the folder being renamed).
@@ -69,7 +73,8 @@ the ground truth of every reference in the fixture workspace
 (`tests/fixtures/workspace/`) — if you add/move a reference in a fixture,
 update corpus.ts, not individual test expectations. Fixtures encode the edge
 cases deliberately (near-miss typo, fenced block, inline code, out-of-scope
-`docs/guide.md`, duplicate `deploy` skills); don't "clean them up".
+`docs/guide.md`, duplicate `deploy` skills, builtin-shadowing `modal` skill,
+custom command files); don't "clean them up".
 
 Distribution targets in `ext/` (thin shims around the same server):
 
