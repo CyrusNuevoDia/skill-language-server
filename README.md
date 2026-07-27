@@ -1,5 +1,8 @@
 # skill-lsp
 
+[![npm](https://img.shields.io/npm/v/skill-language-server)](https://www.npmjs.com/package/skill-language-server)
+[![CI](https://github.com/CyrusNuevoDia/skill-language-server/actions/workflows/ci.yml/badge.svg)](https://github.com/CyrusNuevoDia/skill-language-server/actions/workflows/ci.yml)
+
 **Rename an agent skill once — the folder, the frontmatter, and every reference across your workspace update together.** A language server for SKILL.md files. Works in VS Code, Zed, Neovim, and Helix.
 
 Agent skills are markdown files that reference each other — `/ship`, `$verify` (the sigil varies by agent; both mean the same thing) — from other skills, `CLAUDE.md`/`AGENTS.md` memory files, and agent definitions. That's a real dependency graph with all the refactoring hazards of code and none of the tooling: rename a skill by hand and you're editing a folder name, a `name:` field, and every reference that mentions it, hoping you found them all. skill-lsp gives skill files the ergonomics TypeScript gives symbols:
@@ -92,6 +95,8 @@ just fmt     # ultracite fix --unsafe
 The test suite is the contract: `tests/harness.ts` boots the real server over in-memory streams and speaks JSON-RPC to it; `tests/corpus.ts` holds the ground-truth reference set for the fixture workspace. Work is done when `just check` and `bun test` are green — the suite was written before the server was.
 
 Architecture is three small layers in `src/`: `parse.ts` (frontmatter + token grammar), `workspace.ts` (the index), `server.ts` (LSP wiring). Editor shims live in `ext/{vscode,zed,nvim}`.
+
+Releases use [changesets](https://github.com/changesets/changesets): run `bun changeset` alongside your change (CI fails PRs that touch release inputs without one), merge to main, and the release workflow versions, publishes to npm via OIDC trusted publishing, and tags — no manual publish step.
 
 ## License
 

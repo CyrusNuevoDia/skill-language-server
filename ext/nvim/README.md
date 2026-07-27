@@ -1,6 +1,6 @@
 # skill-lsp for Neovim (0.11+)
 
-Install the server binary first: `just bin` (or put `skill-lsp` on your PATH).
+Install the server binary first: `npm install -g skill-language-server` (or, from a repo clone, `just bin`) — either way `skill-lsp` ends up on your PATH.
 
 With lazy.nvim:
 
