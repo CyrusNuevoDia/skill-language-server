@@ -9,6 +9,7 @@ Agent skills are markdown files that reference each other — `/ship`, `$verify`
 - **Find references** — every mention of a skill across skills, memory files, and agent files.
 - **Diagnostics** — typo'd references get a *did you mean* suggestion; missing or mismatched frontmatter `name:` fields and duplicate skill names get flagged.
 - **Completion** — type `/` or `$` and get every skill with its description.
+- **Highlighting & links** — resolved references get semantic-token coloring (editors that support it) and are clickable document links everywhere; typos conspicuously stay plain.
 
 It stays quiet where markdown demands it: fenced code blocks are never parsed — no references, no diagnostics, no completion popups (indented code blocks aren't detected; use fences). Multi-segment paths like `/usr/bin` and uppercase shell vars like `$PATH` are never references, and completion follows the same boundary rules, so typing `docs/` won't pop the skill list. Inline code spans *do* count — that's how people write skill names in prose — and unknown names produce nothing.
 
