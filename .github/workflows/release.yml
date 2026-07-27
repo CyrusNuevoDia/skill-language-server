@@ -7,6 +7,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 concurrency:
   group: release-${{ github.head_ref || github.ref }}
@@ -62,6 +63,10 @@ jobs:
             esac
           done < "$changed_files"
 
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            release=true
+          fi
+
           {
             echo "check_changeset=$check_changeset"
             echo "release=$release"
@@ -87,7 +92,7 @@ jobs:
         run: bun scripts/check-release-changeset.ts
 
   release:
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.release == 'true' }}
+    if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.changes.outputs.release == 'true' }}
     needs: changes
     runs-on: ubuntu-latest
     permissions:
