@@ -1,5 +1,11 @@
 # skill-language-server
 
+## 0.5.0
+
+### Minor Changes
+
+- [`3473967`](https://github.com/CyrusNuevoDia/skill-language-server/commit/34739678a1d3bdd6ab728c4477e53b0d64da135e) Thanks [@CyrusNuevoDia](https://github.com/CyrusNuevoDia)! - Unresolved `/references` now get an info-level "Unknown skill" diagnostic, closing the silent-stale-reference gap for renames that travel beyond did-you-mean's edit distance. Built-in CLI commands (Claude Code + Codex CLI, curated in `src/builtins.ts`) and workspace-defined custom commands (`.claude/commands/*.md`, `.codex/prompts/*.md`) are recognized as commands, not skills, and are exempt from all unknown-skill diagnostics — including did-you-mean warnings, so a skill named `modal` no longer flags prose mentions of `/model`. `$`-sigil tokens are unaffected: they still get near-miss warnings but never the info hint, since ordinary prose (`$5`, `$my_var`) matches the token grammar.
+
 ## 0.4.2
 
 ### Patch Changes
