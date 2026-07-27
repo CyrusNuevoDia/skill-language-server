@@ -1,0 +1,6 @@
+node_modules/
+dist/
+*.tsbuildinfo
+ext/zed/target/
+ext/zed/Cargo.lock
+ext/zed/*.wasm

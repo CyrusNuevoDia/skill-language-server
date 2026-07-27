@@ -1,0 +1,4 @@
+[tools]
+bun = "latest"
+just = "latest"
+rust = "latest"

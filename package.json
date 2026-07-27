@@ -1,0 +1,26 @@
+{
+  "dependencies": {
+    "es-toolkit": "^1.50.0",
+    "vscode-languageserver": "^10.1.0",
+    "vscode-languageserver-textdocument": "1.0.13",
+    "yaml": "^2.5.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.3",
+    "@types/bun": "^1.1.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^7.0.2",
+    "ultracite": "7.9.4",
+    "vscode-languageserver-protocol": "^3.18.2"
+  },
+  "name": "skill-lsp",
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "check": "ultracite check",
+    "fix": "ultracite fix"
+  },
+  "type": "module",
+  "version": "0.0.1",
+  "private": true
+}
