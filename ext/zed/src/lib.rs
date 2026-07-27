@@ -13,7 +13,7 @@ impl zed::Extension for SkillLanguageServerExtension {
         worktree: &zed::Worktree,
     ) -> Result<zed::Command> {
         let command = worktree.which("skill-language-server").ok_or_else(|| {
-            "skill-language-server not found on PATH — run `just bin` and make sure ~/.local/bin is on your PATH".to_string()
+            "skill-language-server not found on PATH — install it with `npm install -g skill-language-server` (or `just bin` from a repo checkout)".to_string()
         })?;
         Ok(zed::Command {
             command,
