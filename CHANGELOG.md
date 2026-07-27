@@ -1,5 +1,11 @@
 # skill-language-server
 
+## 0.5.1
+
+### Patch Changes
+
+- [`3a8a6f6`](https://github.com/CyrusNuevoDia/skill-language-server/commit/3a8a6f689176bfa9f0c94bcf8809aa2905473f0d) Thanks [@CyrusNuevoDia](https://github.com/CyrusNuevoDia)! - Relax Node engines requirement to >=22 so the Zed extension can run the npm-installed server on Zed's bundled Node runtime. The Zed shim now auto-installs `skill-language-server` from npm (and keeps it updated) when no binary is found on PATH.
+
 ## 0.5.0
 
 ### Minor Changes
