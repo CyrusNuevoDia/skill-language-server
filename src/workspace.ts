@@ -1,6 +1,6 @@
 import { type Dirent, readdirSync, readFileSync } from "node:fs"
 import { basename, dirname, join, relative, sep } from "node:path"
-import { fileURLToPath, pathToFileURL } from "node:url"
+import { fileURLToPath } from "node:url"
 import { type } from "arktype"
 import { minBy } from "es-toolkit"
 import ignore, { type Ignore } from "ignore"
@@ -9,9 +9,9 @@ import {
   DiagnosticSeverity,
   type Location,
   type Position,
-  type Range,
 } from "vscode-languageserver"
 import { type Frontmatter, NAME_PATTERN, parseDoc, type Token } from "./parse"
+import { containsPos, distance, rangeIn, uriOf, ZERO_RANGE } from "./utils"
 
 /** Full-string variant of the token grammar, plus the length cap for renames. */
 export const SkillName = type(new RegExp(`^${NAME_PATTERN}$`)).atMostLength(64)
@@ -85,7 +85,7 @@ export class Workspace {
     try {
       return this.indexFile(path, readFileSync(path, "utf8"))
     } catch {
-      this.removeFile(pathToFileURL(path).toString())
+      this.removeFile(uriOf(path))
       return null
     }
   }
@@ -100,7 +100,7 @@ export class Workspace {
   }
 
   indexFile(path: string, text: string): FileEntry {
-    const uri = pathToFileURL(path).toString()
+    const uri = uriOf(path)
     const previous = this.files.get(uri)
     if (previous?.skillFolder) {
       this.removeSkill(previous)
@@ -152,19 +152,15 @@ export class Workspace {
 
   /** The SKILL.md file entry backing a skill. */
   entryOf(skill: Skill): FileEntry | undefined {
-    return this.files.get(pathToFileURL(skill.skillFilePath).toString())
+    return this.files.get(uriOf(skill.skillFilePath))
   }
 
   /** Location of a skill's definition: the frontmatter `name:` value. */
   definitionOf(skill: Skill): Location {
     const entry = this.entryOf(skill)
-    const zero: Range = {
-      end: { character: 0, line: 0 },
-      start: { character: 0, line: 0 },
-    }
     return {
-      range: entry?.frontmatter?.nameRange ?? zero,
-      uri: pathToFileURL(skill.skillFilePath).toString(),
+      range: entry?.frontmatter?.nameRange ?? ZERO_RANGE,
+      uri: uriOf(skill.skillFilePath),
     }
   }
 
@@ -185,11 +181,11 @@ export class Workspace {
   tokenAt(uri: string, pos: Position): Token | undefined {
     return this.files
       .get(uri)
-      ?.tokens.find(
-        (t) =>
-          t.line === pos.line &&
-          pos.character >= t.startChar &&
-          pos.character <= t.nameRange.end.character
+      ?.tokens.find((t) =>
+        containsPos(
+          rangeIn(t.line, t.startChar, t.nameRange.end.character),
+          pos
+        )
       )
   }
 
@@ -200,11 +196,7 @@ export class Workspace {
     if (!(entry?.skillFolder && range)) {
       return
     }
-    const inRange =
-      pos.line === range.start.line &&
-      pos.character >= range.start.character &&
-      pos.character <= range.end.character
-    return inRange ? entry.skillFolder : undefined
+    return containsPos(range, pos) ? entry.skillFolder : undefined
   }
 
   /** Resolve the skill a position points at, via reference token or declaration. */
@@ -241,10 +233,7 @@ export class Workspace {
     if (entry.skillFolder && !entry.frontmatter?.nameRange) {
       out.push({
         message: `SKILL.md is missing a frontmatter "name: ${entry.skillFolder}" field.`,
-        range: {
-          end: { character: 0, line: 0 },
-          start: { character: 0, line: 0 },
-        },
+        range: ZERO_RANGE,
         severity: DiagnosticSeverity.Error,
         source: "skill-language-server",
       })
@@ -303,33 +292,4 @@ function* walk(dir: string): Generator<string> {
       yield join(dir, e.name)
     }
   }
-}
-
-/** Optimal string alignment (Damerau-Levenshtein with adjacent transpositions). */
-export function distance(a: string, b: string): number {
-  const rows = a.length + 1
-  const cols = b.length + 1
-  const d: number[][] = []
-  for (let i = 0; i < rows; i += 1) {
-    const row = new Array<number>(cols).fill(0)
-    row[0] = i
-    d.push(row)
-  }
-  for (let j = 0; j < cols; j += 1) {
-    d[0][j] = j
-  }
-  for (let i = 1; i < rows; i += 1) {
-    for (let j = 1; j < cols; j += 1) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1
-      d[i][j] = Math.min(
-        d[i - 1][j] + 1,
-        d[i][j - 1] + 1,
-        d[i - 1][j - 1] + cost
-      )
-      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
-        d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1)
-      }
-    }
-  }
-  return d[a.length][b.length]
 }

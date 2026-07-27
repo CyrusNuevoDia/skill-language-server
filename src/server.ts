@@ -1,5 +1,5 @@
 import { basename, dirname, join } from "node:path"
-import { fileURLToPath, pathToFileURL } from "node:url"
+import { fileURLToPath } from "node:url"
 import { type } from "arktype"
 import { groupBy } from "es-toolkit"
 import {
@@ -22,6 +22,7 @@ import {
 } from "vscode-languageserver"
 import { TextDocument } from "vscode-languageserver-textdocument"
 import { BAD_PREV } from "./parse"
+import { pathOf, uriOf } from "./utils"
 import { type Skill, SkillName, Workspace } from "./workspace"
 
 const TYPED_PREFIX = /^[a-z0-9_:-]*$/
@@ -108,21 +109,20 @@ export function startServer(connection: Connection): void {
   })
 
   function isSkillignore(uri: string): boolean {
-    return (
-      uri.startsWith("file:") && basename(fileURLToPath(uri)) === ".skillignore"
-    )
+    const path = pathOf(uri)
+    return path !== null && basename(path) === ".skillignore"
   }
 
   function applyWatchedChange(change: FileChangeType, uri: string): void {
-    if (!(ws && uri.startsWith("file:")) || isSkillignore(uri)) {
+    if (!ws || isSkillignore(uri)) {
       return
     }
     // An open buffer is authoritative over disk until the editor closes it.
     if (documents.get(uri)) {
       return
     }
-    const path = fileURLToPath(uri)
-    if (!ws.inScope(path)) {
+    const path = pathOf(uri)
+    if (!(path && ws.inScope(path))) {
       return
     }
     if (change === FileChangeType.Deleted) {
@@ -141,11 +141,8 @@ export function startServer(connection: Connection): void {
     ws.scan()
     // scan() reads disk; restore index entries for dirty open buffers.
     for (const doc of documents.all()) {
-      if (!doc.uri.startsWith("file:")) {
-        continue
-      }
-      const path = fileURLToPath(doc.uri)
-      if (ws.inScope(path)) {
+      const path = pathOf(doc.uri)
+      if (path && ws.inScope(path)) {
         ws.indexFile(path, doc.getText())
       }
     }
@@ -171,11 +168,11 @@ export function startServer(connection: Connection): void {
   }
 
   documents.onDidChangeContent(({ document }) => {
-    if (!(ws && document.uri.startsWith("file:"))) {
+    if (!ws) {
       return
     }
-    const path = fileURLToPath(document.uri)
-    if (!ws.inScope(path)) {
+    const path = pathOf(document.uri)
+    if (!(path && ws.inScope(path))) {
       return
     }
     const entry = ws.indexFile(path, document.getText())
@@ -192,7 +189,7 @@ export function startServer(connection: Connection): void {
   })
 
   connection.languages.semanticTokens.on(({ textDocument }) => {
-    if (!(ws && textDocument.uri.startsWith("file:"))) {
+    if (!ws) {
       return { data: [] }
     }
     const entry = ws.files.get(textDocument.uri)
@@ -215,7 +212,7 @@ export function startServer(connection: Connection): void {
   })
 
   connection.onDocumentLinks(({ textDocument }) => {
-    if (!(ws && textDocument.uri.startsWith("file:"))) {
+    if (!ws) {
       return []
     }
     const entry = ws.files.get(textDocument.uri)
@@ -231,7 +228,7 @@ export function startServer(connection: Connection): void {
             end: token.nameRange.end,
             start: { character: token.startChar, line: token.line },
           },
-          target: pathToFileURL(skill.skillFilePath).toString(),
+          target: uriOf(skill.skillFilePath),
         })
       }
     }
@@ -302,10 +299,8 @@ export function startServer(connection: Connection): void {
         ...edits,
         {
           kind: "rename" as const,
-          newUri: pathToFileURL(
-            join(dirname(skill.folderPath), newName)
-          ).toString(),
-          oldUri: pathToFileURL(skill.folderPath).toString(),
+          newUri: uriOf(join(dirname(skill.folderPath), newName)),
+          oldUri: uriOf(skill.folderPath),
         },
       ],
     } satisfies WorkspaceEdit
@@ -334,11 +329,12 @@ export function startServer(connection: Connection): void {
   })
 
   connection.onCompletion(({ textDocument, position }) => {
-    if (!(ws && textDocument.uri.startsWith("file:"))) {
+    if (!ws) {
       return null
     }
     const doc = documents.get(textDocument.uri)
-    if (!(doc && ws.inScope(fileURLToPath(textDocument.uri)))) {
+    const path = pathOf(textDocument.uri)
+    if (!(doc && path && ws.inScope(path))) {
       return null
     }
     if (ws.files.get(textDocument.uri)?.fenced.has(position.line)) {

@@ -2,6 +2,7 @@ import { regex } from "arkregex"
 import { type } from "arktype"
 import type { Range } from "vscode-languageserver"
 import { parse as parseYAML } from "yaml"
+import { rangeIn } from "./utils"
 
 const FrontmatterFields = type({ "description?": "string", "name?": "string" })
 
@@ -71,10 +72,7 @@ export function parseDoc(text: string): ParsedDoc {
       tokens.push({
         line: i,
         name: m[1],
-        nameRange: {
-          end: { character: m.index + m[0].length, line: i },
-          start: { character: m.index + 1, line: i },
-        },
+        nameRange: rangeIn(i, m.index + 1, m.index + m[0].length),
         sigil: line[m.index] as "/" | "$",
         startChar: m.index,
       })
@@ -113,10 +111,7 @@ function parseFrontmatter(lines: string[]): Frontmatter | null {
     const m = NAME_LINE.exec(lines[i])
     if (m) {
       const col = lines[i].indexOf(m[1])
-      nameRange = {
-        end: { character: col + m[1].length, line: i },
-        start: { character: col, line: i },
-      }
+      nameRange = rangeIn(i, col, col + m[1].length)
       break
     }
   }
