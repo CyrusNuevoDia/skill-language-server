@@ -27,9 +27,11 @@ export type ParsedDoc = {
   tokens: Token[]
 }
 
-const TOKEN = /[/$]([a-z0-9][a-z0-9-]*)/g
-/** A sigil preceded by any of these is a path segment, shell var, etc. */
-export const BAD_PREV = /[A-Za-z0-9_$/.-]/
+// Name = [a-z0-9_] segments joined by single "-" or ":" — separators can
+// never lead, trail, or double, so "/ship:" in prose keeps its colon.
+const TOKEN = /[/$]([a-z0-9_]+(?:[-:][a-z0-9_]+)*)/g
+/** A sigil preceded by any of these is a path segment, URI scheme, shell var, etc. */
+export const BAD_PREV = /[A-Za-z0-9_$/:.-]/
 const FENCE = /^ {0,3}(```|~~~)/
 const NAME_LINE = /^name:\s*(\S.*?)\s*$/
 

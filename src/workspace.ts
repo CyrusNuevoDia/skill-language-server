@@ -12,7 +12,7 @@ import {
 } from "vscode-languageserver"
 import { type Frontmatter, parseDoc, type Token } from "./parse"
 
-export const NAME_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/
+export const NAME_RE = /^[a-z0-9_]+([-:][a-z0-9_]+)*$/
 export const MAX_NAME_LENGTH = 64
 
 const SCAN_SEGMENTS = new Set([".claude", ".agents", ".codex", "skills"])

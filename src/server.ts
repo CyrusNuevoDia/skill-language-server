@@ -23,7 +23,7 @@ import { TextDocument } from "vscode-languageserver-textdocument"
 import { BAD_PREV } from "./parse"
 import { MAX_NAME_LENGTH, NAME_RE, type Skill, Workspace } from "./workspace"
 
-const TYPED_PREFIX = /^[a-z0-9-]*$/
+const TYPED_PREFIX = /^[a-z0-9_:-]*$/
 
 export function startServer(connection: Connection): void {
   const documents = new TextDocuments(TextDocument)

@@ -16,6 +16,7 @@ export type RefSpec = {
 
 export const SHIPPING_REFS: RefSpec[] = [
   { length: 8, needle: "/shipping", offset: 1, rel: "AGENTS.md" },
+  { length: 8, needle: "/shipping", offset: 1, rel: ".claude/team.md" },
   {
     length: 8,
     needle: "/shipping",
