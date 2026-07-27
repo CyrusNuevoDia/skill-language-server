@@ -1,5 +1,6 @@
 import { basename, dirname, join } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
+import { type } from "arktype"
 import { groupBy } from "es-toolkit"
 import {
   type CompletionItem,
@@ -21,7 +22,7 @@ import {
 } from "vscode-languageserver"
 import { TextDocument } from "vscode-languageserver-textdocument"
 import { BAD_PREV } from "./parse"
-import { MAX_NAME_LENGTH, NAME_RE, type Skill, Workspace } from "./workspace"
+import { type Skill, SkillName, Workspace } from "./workspace"
 
 const TYPED_PREFIX = /^[a-z0-9_:-]*$/
 
@@ -112,7 +113,7 @@ export function startServer(connection: Connection): void {
     )
   }
 
-  function applyWatchedChange(type: FileChangeType, uri: string): void {
+  function applyWatchedChange(change: FileChangeType, uri: string): void {
     if (!(ws && uri.startsWith("file:")) || isSkillignore(uri)) {
       return
     }
@@ -124,7 +125,7 @@ export function startServer(connection: Connection): void {
     if (!ws.inScope(path)) {
       return
     }
-    if (type === FileChangeType.Deleted) {
+    if (change === FileChangeType.Deleted) {
       ws.removeFile(uri)
       connection.sendDiagnostics({ diagnostics: [], uri })
     } else {
@@ -277,10 +278,11 @@ export function startServer(connection: Connection): void {
       return null
     }
 
-    if (!NAME_RE.test(newName) || newName.length > MAX_NAME_LENGTH) {
+    const validated = SkillName(newName)
+    if (validated instanceof type.errors) {
       throw new ResponseError(
         ErrorCodes.InvalidParams,
-        `Invalid skill name "${newName}": must match ${NAME_RE} and be ≤${MAX_NAME_LENGTH} chars.`
+        `Invalid skill name "${newName}": ${validated.summary}`
       )
     }
     if (newName !== skill.name && ws.skills.has(newName)) {
@@ -323,7 +325,7 @@ export function startServer(connection: Connection): void {
         continue
       }
       const newName = basename(fileURLToPath(newUri))
-      if (!NAME_RE.test(newName) || newName.length > MAX_NAME_LENGTH) {
+      if (!SkillName.allows(newName)) {
         continue
       }
       edits.push(...renameTextEdits(ws, skill, newName))

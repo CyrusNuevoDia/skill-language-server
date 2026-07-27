@@ -28,6 +28,8 @@
     "node": ">=24"
   },
   "dependencies": {
+    "arkregex": "^0.0.8",
+    "arktype": "^2.2.3",
     "es-toolkit": "^1.50.0",
     "ignore": "^7.0.6",
     "vscode-languageserver": "^10.1.0",

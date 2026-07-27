@@ -1,6 +1,7 @@
 import { type Dirent, readdirSync, readFileSync } from "node:fs"
 import { basename, dirname, join, relative, sep } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
+import { type } from "arktype"
 import { minBy } from "es-toolkit"
 import ignore, { type Ignore } from "ignore"
 import {
@@ -10,10 +11,11 @@ import {
   type Position,
   type Range,
 } from "vscode-languageserver"
-import { type Frontmatter, parseDoc, type Token } from "./parse"
+import { type Frontmatter, NAME_PATTERN, parseDoc, type Token } from "./parse"
 
-export const NAME_RE = /^[a-z0-9_]+([-:]+[a-z0-9_]+)*$/
-export const MAX_NAME_LENGTH = 64
+/** Full-string variant of the token grammar, plus the length cap for renames. */
+export const SkillName = type(new RegExp(`^${NAME_PATTERN}$`)).atMostLength(64)
+export type SkillName = typeof SkillName.infer
 
 const SCAN_SEGMENTS = new Set([".claude", ".agents", ".codex", "skills"])
 /** Agent memory files reference skills from anywhere in the tree. */

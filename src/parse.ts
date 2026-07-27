@@ -1,11 +1,13 @@
+import { regex } from "arkregex"
+import { type } from "arktype"
 import type { Range } from "vscode-languageserver"
 import { parse as parseYAML } from "yaml"
 
-export type Frontmatter = {
-  description?: string
+const FrontmatterFields = type({ "description?": "string", "name?": "string" })
+
+export type Frontmatter = typeof FrontmatterFields.infer & {
   /** First line index after the closing `---`. */
   endLine: number
-  name?: string
   /** Range of the value of the `name:` field. */
   nameRange?: Range
 }
@@ -30,11 +32,12 @@ export type ParsedDoc = {
 // Name = [a-z0-9_] segments joined by runs of "-" or ":" — separators can
 // repeat (a::b, x--y) but never lead or trail, so "/ship:" in prose keeps
 // its colon.
-const TOKEN = /[/$]([a-z0-9_]+(?:[-:]+[a-z0-9_]+)*)/g
+export const NAME_PATTERN = "[a-z0-9_]+(?:[-:]+[a-z0-9_]+)*"
+const TOKEN = regex(`[/$](${NAME_PATTERN})`, "g")
 /** A sigil preceded by any of these is a path segment, URI scheme, shell var, etc. */
 export const BAD_PREV = /[A-Za-z0-9_$/:.-]/
 const FENCE = /^ {0,3}(```|~~~)/
-const NAME_LINE = /^name:\s*(\S.*?)\s*$/
+const NAME_LINE = regex("^name:\\s*(\\S.*?)\\s*$")
 
 export function parseDoc(text: string): ParsedDoc {
   const lines = text.split("\n")
@@ -96,12 +99,14 @@ function parseFrontmatter(lines: string[]): Frontmatter | null {
     return null
   }
 
-  let data: Record<string, unknown> = {}
+  let data: unknown = {}
   try {
     data = parseYAML(lines.slice(1, close).join("\n")) ?? {}
   } catch {
     // Malformed YAML: fall through with no fields; diagnostics may cover this later.
   }
+  const parsed = FrontmatterFields(data)
+  const fields = parsed instanceof type.errors ? {} : parsed
 
   let nameRange: Range | undefined
   for (let i = 1; i < close; i += 1) {
@@ -117,10 +122,8 @@ function parseFrontmatter(lines: string[]): Frontmatter | null {
   }
 
   return {
-    description:
-      typeof data.description === "string" ? data.description : undefined,
+    ...fields,
     endLine: close + 1,
-    name: typeof data.name === "string" ? data.name : undefined,
     nameRange,
   }
 }

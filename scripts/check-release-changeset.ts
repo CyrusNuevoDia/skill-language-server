@@ -1,14 +1,18 @@
 import { spawnSync } from "node:child_process"
 import { readFile } from "node:fs/promises"
+import { regex } from "arkregex"
+import { type } from "arktype"
 
 const packageName = "skill-language-server"
-const releaseTypes = ["patch", "minor", "major"] as const
-const changeStatuses = ["A", "C", "M", "R", "D"] as const
 const relativePathPrefixPattern = /^\.\//
-const changesetReleaseLinePattern = /^"([^"]+)":\s*([A-Za-z0-9_-]+)\s*$/
+const changesetReleaseLinePattern = regex(
+  '^"([^"]+)":\\s*([A-Za-z0-9_-]+)\\s*$'
+)
 
-type ReleaseType = (typeof releaseTypes)[number]
-type ChangeStatus = (typeof changeStatuses)[number]
+const ReleaseType = type("'patch' | 'minor' | 'major'")
+type ReleaseType = typeof ReleaseType.infer
+const ChangeStatus = type("'A' | 'C' | 'M' | 'R' | 'D'")
+type ChangeStatus = typeof ChangeStatus.infer
 
 type ChangedFile = {
   status: ChangeStatus
@@ -59,10 +63,6 @@ function normalizePath(filePath: string): string {
   return filePath.replaceAll("\\", "/").replace(relativePathPrefixPattern, "")
 }
 
-function isChangeStatus(status: string): status is ChangeStatus {
-  return changeStatuses.includes(status as ChangeStatus)
-}
-
 function parseNameStatus(diffOutput: string): ChangedFile[] {
   const changes: ChangedFile[] = []
 
@@ -74,7 +74,7 @@ function parseNameStatus(diffOutput: string): ChangedFile[] {
     const [rawStatus, ...rawPaths] = line.split("\t")
     const status = rawStatus?.[0]
 
-    if (status === undefined || !isChangeStatus(status)) {
+    if (!ChangeStatus.allows(status)) {
       fail(`Unable to parse git diff status line: ${line}`)
     }
 
@@ -228,10 +228,6 @@ function printDiagnostics(
   }
 }
 
-function isReleaseType(value: string): value is ReleaseType {
-  return releaseTypes.includes(value as ReleaseType)
-}
-
 function parseChangeset(content: string, filePath: string): ParsedChangeset {
   const lines = content.replaceAll("\r\n", "\n").split("\n")
   const fenceIndices: number[] = []
@@ -285,11 +281,7 @@ function parseChangeset(content: string, filePath: string): ParsedChangeset {
 
     const [, releasePackageName, releaseType] = releaseLine
 
-    if (releasePackageName === undefined || releaseType === undefined) {
-      fail(`${filePath}: malformed frontmatter line: ${trimmed}`)
-    }
-
-    if (!isReleaseType(releaseType)) {
+    if (!ReleaseType.allows(releaseType)) {
       fail(
         `${filePath}: unsupported release type "${releaseType}" for "${releasePackageName}".`
       )
