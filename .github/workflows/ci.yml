@@ -1,0 +1,39 @@
+name: ci
+
+on:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  NODE_VERSION: "24"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        name: checkout
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        name: setup[bun]
+      - uses: actions/setup-node@v6
+        name: setup[node]
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: extractions/setup-just@v4
+        name: setup[just]
+        with:
+          just-version: "1.40.0"
+      - name: deps
+        run: bun install --frozen-lockfile
+      - name: deps[vscode]
+        run: cd ext/vscode && bun install --frozen-lockfile
+      - name: check
+        run: just check
+      - name: test
+        run: bun test

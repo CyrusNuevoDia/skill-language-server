@@ -7,7 +7,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/CyrusNuevoDia/skill-lsp"
+    "url": "https://github.com/CyrusNuevoDia/skill-language-server"
   },
   "engines": {
     "vscode": "^1.85.0"

@@ -4,7 +4,7 @@ version = "0.0.1"
 schema_version = 1
 authors = ["Cyrus <knouroozi@gmail.com>"]
 description = "Go-to-definition, find-references, and cross-file rename for agent skill files (SKILL.md)"
-repository = "https://github.com/CyrusNuevoDia/skill-lsp"
+repository = "https://github.com/CyrusNuevoDia/skill-language-server"
 
 [language_servers.skill-lsp]
 name = "Skill LSP"

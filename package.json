@@ -15,7 +15,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/CyrusNuevoDia/skill-lsp.git"
+    "url": "git+https://github.com/CyrusNuevoDia/skill-language-server.git"
   },
   "type": "module",
   "bin": {
@@ -28,6 +28,7 @@
     "node": ">=18"
   },
   "scripts": {
+    "changeset": "changeset",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "check": "ultracite check",
@@ -44,6 +45,8 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.3",
+    "@changesets/changelog-github": "^0.5.2",
+    "@changesets/cli": "^2.31.0",
     "@types/bun": "^1.1.0",
     "@types/node": "^22.0.0",
     "typescript": "^7.0.2",
