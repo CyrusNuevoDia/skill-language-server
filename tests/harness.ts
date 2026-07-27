@@ -11,6 +11,7 @@ import {
   DefinitionRequest,
   type Diagnostic,
   DidOpenTextDocumentNotification,
+  DocumentLinkRequest,
   InitializedNotification,
   InitializeRequest,
   type Location,
@@ -22,6 +23,7 @@ import {
   ReferencesRequest,
   type RenameFile,
   RenameRequest,
+  SemanticTokensRequest,
   type TextEdit,
   WillRenameFilesRequest,
   type WorkspaceEdit,
@@ -82,12 +84,19 @@ export function rangeOf(
 export class Client {
   readonly diagnostics = new Map<string, Diagnostic[]>()
   readonly conn: ProtocolConnection
+  readonly root: string
 
-  private constructor(conn: ProtocolConnection) {
+  private constructor(conn: ProtocolConnection, root: string) {
     this.conn = conn
+    this.root = root
   }
 
-  static async start(): Promise<Client> {
+  /** Resolve a workspace-relative path against THIS client's root. */
+  uriFor(rel: string): string {
+    return pathToFileURL(resolve(this.root, rel)).toString()
+  }
+
+  static async start(root: string = WORKSPACE): Promise<Client> {
     const clientToServer = new PassThrough()
     const serverToClient = new PassThrough()
 
@@ -97,21 +106,28 @@ export class Client {
       new StreamMessageReader(serverToClient),
       new StreamMessageWriter(clientToServer)
     )
-    const client = new Client(conn)
+    const client = new Client(conn, root)
     conn.onNotification(PublishDiagnosticsNotification.type, (p) => {
       client.diagnostics.set(p.uri, p.diagnostics)
     })
     conn.listen()
 
-    const rootUri = pathToFileURL(WORKSPACE).toString()
+    const rootUri = pathToFileURL(root).toString()
     await conn.sendRequest(InitializeRequest.type, {
       capabilities: {
         textDocument: {
           completion: {
             completionItem: { documentationFormat: ["markdown", "plaintext"] },
           },
+          documentLink: {},
           publishDiagnostics: {},
           rename: { prepareSupport: true },
+          semanticTokens: {
+            formats: ["relative"],
+            requests: { full: true },
+            tokenModifiers: [],
+            tokenTypes: ["function"],
+          },
         },
         workspace: {
           fileOperations: { willRename: true },
@@ -138,8 +154,8 @@ export class Client {
     return this.conn.sendNotification(DidOpenTextDocumentNotification.type, {
       textDocument: {
         languageId: "markdown",
-        text: text ?? contentOf(rel),
-        uri: uriFor(rel),
+        text: text ?? readFileSync(resolve(this.root, rel), "utf8"),
+        uri: this.uriFor(rel),
         version: 1,
       },
     })
@@ -148,7 +164,19 @@ export class Client {
   definition(rel: string, position: Position) {
     return this.conn.sendRequest(DefinitionRequest.type, {
       position,
-      textDocument: { uri: uriFor(rel) },
+      textDocument: { uri: this.uriFor(rel) },
+    })
+  }
+
+  semanticTokens(rel: string) {
+    return this.conn.sendRequest(SemanticTokensRequest.type, {
+      textDocument: { uri: this.uriFor(rel) },
+    })
+  }
+
+  documentLinks(rel: string) {
+    return this.conn.sendRequest(DocumentLinkRequest.type, {
+      textDocument: { uri: this.uriFor(rel) },
     })
   }
 
@@ -156,14 +184,14 @@ export class Client {
     return this.conn.sendRequest(ReferencesRequest.type, {
       context: { includeDeclaration },
       position,
-      textDocument: { uri: uriFor(rel) },
+      textDocument: { uri: this.uriFor(rel) },
     })
   }
 
   prepareRename(rel: string, position: Position) {
     return this.conn.sendRequest(PrepareRenameRequest.type, {
       position,
-      textDocument: { uri: uriFor(rel) },
+      textDocument: { uri: this.uriFor(rel) },
     })
   }
 
@@ -171,26 +199,26 @@ export class Client {
     return this.conn.sendRequest(RenameRequest.type, {
       newName,
       position,
-      textDocument: { uri: uriFor(rel) },
+      textDocument: { uri: this.uriFor(rel) },
     })
   }
 
   willRenameFolder(oldRel: string, newRel: string) {
     return this.conn.sendRequest(WillRenameFilesRequest.type, {
-      files: [{ newUri: uriFor(newRel), oldUri: uriFor(oldRel) }],
+      files: [{ newUri: this.uriFor(newRel), oldUri: this.uriFor(oldRel) }],
     })
   }
 
   completion(rel: string, position: Position) {
     return this.conn.sendRequest(CompletionRequest.type, {
       position,
-      textDocument: { uri: uriFor(rel) },
+      textDocument: { uri: this.uriFor(rel) },
     })
   }
 
   /** Wait until the server has published diagnostics (possibly empty) for a file. */
   async diagnosticsFor(rel: string, timeoutMs = 3000): Promise<Diagnostic[]> {
-    const uri = uriFor(rel)
+    const uri = this.uriFor(rel)
     const deadline = Date.now() + timeoutMs
     for (;;) {
       const published = this.diagnostics.get(uri)

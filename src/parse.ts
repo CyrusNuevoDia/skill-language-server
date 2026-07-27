@@ -21,13 +21,15 @@ export type Token = {
 }
 
 export type ParsedDoc = {
+  /** Line numbers inside (or delimiting) fenced code blocks. */
+  fenced: Set<number>
   frontmatter: Frontmatter | null
   tokens: Token[]
 }
 
 const TOKEN = /[/$]([a-z0-9][a-z0-9-]*)/g
 /** A sigil preceded by any of these is a path segment, shell var, etc. */
-const BAD_PREV = /[A-Za-z0-9_$/.-]/
+export const BAD_PREV = /[A-Za-z0-9_$/.-]/
 const FENCE = /^ {0,3}(```|~~~)/
 const NAME_LINE = /^name:\s*(\S.*?)\s*$/
 
@@ -36,15 +38,18 @@ export function parseDoc(text: string): ParsedDoc {
   const frontmatter = parseFrontmatter(lines)
 
   const tokens: Token[] = []
+  const fenced = new Set<number>()
   let inFence = false
   const startLine = frontmatter ? frontmatter.endLine : 0
   for (let i = startLine; i < lines.length; i += 1) {
     const line = lines[i]
     if (FENCE.test(line)) {
       inFence = !inFence
+      fenced.add(i)
       continue
     }
     if (inFence) {
+      fenced.add(i)
       continue
     }
 
@@ -69,7 +74,7 @@ export function parseDoc(text: string): ParsedDoc {
       })
     }
   }
-  return { frontmatter, tokens }
+  return { fenced, frontmatter, tokens }
 }
 
 function parseFrontmatter(lines: string[]): Frontmatter | null {

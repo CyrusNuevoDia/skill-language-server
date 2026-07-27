@@ -5,17 +5,22 @@ import {
   type CompletionItem,
   CompletionItemKind,
   type Connection,
+  DidChangeWatchedFilesNotification,
+  type DocumentLink,
   ErrorCodes,
+  FileChangeType,
   type InitializeParams,
   LSPErrorCodes,
   ResourceOperationKind,
   ResponseError,
+  SemanticTokensBuilder,
   type TextDocumentEdit,
   TextDocumentSyncKind,
   TextDocuments,
   type WorkspaceEdit,
 } from "vscode-languageserver"
 import { TextDocument } from "vscode-languageserver-textdocument"
+import { BAD_PREV } from "./parse"
 import { MAX_NAME_LENGTH, NAME_RE, type Skill, Workspace } from "./workspace"
 
 const TYPED_PREFIX = /^[a-z0-9-]*$/
@@ -24,6 +29,7 @@ export function startServer(connection: Connection): void {
   const documents = new TextDocuments(TextDocument)
   let ws: Workspace | null = null
   let supportsRenameFile = false
+  let supportsWatchedFiles = false
 
   connection.onInitialize((params: InitializeParams) => {
     const rootUri = params.workspaceFolders?.[0]?.uri ?? params.rootUri
@@ -37,13 +43,21 @@ export function startServer(connection: Connection): void {
     supportsRenameFile =
       wsEdit?.documentChanges === true ||
       (wsEdit?.resourceOperations ?? []).includes(ResourceOperationKind.Rename)
+    supportsWatchedFiles =
+      params.capabilities.workspace?.didChangeWatchedFiles
+        ?.dynamicRegistration === true
 
     return {
       capabilities: {
         completionProvider: { triggerCharacters: ["/", "$"] },
         definitionProvider: true,
+        documentLinkProvider: {},
         referencesProvider: true,
         renameProvider: { prepareProvider: true },
+        semanticTokensProvider: {
+          full: true,
+          legend: { tokenModifiers: [], tokenTypes: ["function"] },
+        },
         textDocumentSync: TextDocumentSyncKind.Incremental,
         workspace: {
           fileOperations: {
@@ -62,14 +76,98 @@ export function startServer(connection: Connection): void {
     if (!ws) {
       return
     }
+    if (supportsWatchedFiles) {
+      connection.client
+        .register(DidChangeWatchedFilesNotification.type, {
+          watchers: [
+            { globPattern: "**/*.md" },
+            { globPattern: "**/.skillignore" },
+          ],
+        })
+        .catch(() => {
+          // Client declined; didOpen-based reindexing still works.
+        })
+    }
     ws.scan()
+    publishAll()
+  })
+
+  connection.onDidChangeWatchedFiles(({ changes }) => {
+    if (!ws) {
+      return
+    }
+    for (const change of changes) {
+      applyWatchedChange(change.type, change.uri)
+    }
+    if (changes.some((c) => isSkillignore(c.uri))) {
+      rescanPreservingOpenBuffers()
+    }
+    // Duplicate/mismatch diagnostics depend on global state; republish all.
+    publishAll()
+  })
+
+  function isSkillignore(uri: string): boolean {
+    return (
+      uri.startsWith("file:") && basename(fileURLToPath(uri)) === ".skillignore"
+    )
+  }
+
+  function applyWatchedChange(type: FileChangeType, uri: string): void {
+    if (!(ws && uri.startsWith("file:")) || isSkillignore(uri)) {
+      return
+    }
+    // An open buffer is authoritative over disk until the editor closes it.
+    if (documents.get(uri)) {
+      return
+    }
+    const path = fileURLToPath(uri)
+    if (!ws.inScope(path)) {
+      return
+    }
+    if (type === FileChangeType.Deleted) {
+      ws.removeFile(uri)
+      connection.sendDiagnostics({ diagnostics: [], uri })
+    } else {
+      ws.reindexPath(path)
+    }
+  }
+
+  function rescanPreservingOpenBuffers(): void {
+    if (!ws) {
+      return
+    }
+    const before = new Set(ws.files.keys())
+    ws.scan()
+    // scan() reads disk; restore index entries for dirty open buffers.
+    for (const doc of documents.all()) {
+      if (!doc.uri.startsWith("file:")) {
+        continue
+      }
+      const path = fileURLToPath(doc.uri)
+      if (ws.inScope(path)) {
+        ws.indexFile(path, doc.getText())
+      }
+    }
+    // Files the rescan dropped (newly ignored) keep stale diagnostics on
+    // screen unless we explicitly clear them.
+    for (const uri of before) {
+      if (!ws.files.has(uri)) {
+        connection.sendDiagnostics({ diagnostics: [], uri })
+      }
+    }
+  }
+
+  function publishAll(): void {
+    if (!ws) {
+      return
+    }
     for (const entry of ws.files.values()) {
       connection.sendDiagnostics({
         diagnostics: ws.diagnosticsFor(entry),
         uri: entry.uri,
       })
     }
-  })
+  }
 
   documents.onDidChangeContent(({ document }) => {
     if (!(ws && document.uri.startsWith("file:"))) {
@@ -90,6 +188,53 @@ export function startServer(connection: Connection): void {
     const token = ws?.tokenAt(textDocument.uri, position)
     const skill = token && ws?.skillOf(token.name)
     return skill ? ws?.definitionOf(skill) : null
+  })
+
+  connection.languages.semanticTokens.on(({ textDocument }) => {
+    if (!(ws && textDocument.uri.startsWith("file:"))) {
+      return { data: [] }
+    }
+    const entry = ws.files.get(textDocument.uri)
+    if (!entry) {
+      return { data: [] }
+    }
+    const builder = new SemanticTokensBuilder()
+    for (const token of entry.tokens) {
+      if (ws.skillOf(token.name)) {
+        builder.push(
+          token.line,
+          token.startChar,
+          token.nameRange.end.character - token.startChar,
+          0,
+          0
+        )
+      }
+    }
+    return builder.build()
+  })
+
+  connection.onDocumentLinks(({ textDocument }) => {
+    if (!(ws && textDocument.uri.startsWith("file:"))) {
+      return []
+    }
+    const entry = ws.files.get(textDocument.uri)
+    if (!entry) {
+      return []
+    }
+    const links: DocumentLink[] = []
+    for (const token of entry.tokens) {
+      const skill = ws.skillOf(token.name)
+      if (skill) {
+        links.push({
+          range: {
+            end: token.nameRange.end,
+            start: { character: token.startChar, line: token.line },
+          },
+          target: pathToFileURL(skill.skillFilePath).toString(),
+        })
+      }
+    }
+    return links
   })
 
   connection.onReferences(({ textDocument, position, context }) => {
@@ -187,11 +332,14 @@ export function startServer(connection: Connection): void {
   })
 
   connection.onCompletion(({ textDocument, position }) => {
-    if (!ws) {
+    if (!(ws && textDocument.uri.startsWith("file:"))) {
       return null
     }
     const doc = documents.get(textDocument.uri)
-    if (!doc) {
+    if (!(doc && ws.inScope(fileURLToPath(textDocument.uri)))) {
+      return null
+    }
+    if (ws.files.get(textDocument.uri)?.fenced.has(position.line)) {
       return null
     }
     const prefix = doc.getText({
@@ -200,6 +348,12 @@ export function startServer(connection: Connection): void {
     })
     const sigilAt = Math.max(prefix.lastIndexOf("/"), prefix.lastIndexOf("$"))
     if (sigilAt === -1) {
+      return null
+    }
+    // Same boundary rule as the reference parser: a sigil preceded by a
+    // word/path char is a file path or shell var, not a skill reference.
+    const before = sigilAt > 0 ? prefix[sigilAt - 1] : ""
+    if (before && BAD_PREV.test(before)) {
       return null
     }
     const typed = prefix.slice(sigilAt + 1)
@@ -232,8 +386,13 @@ function renameTextEdits(
   skill: Skill,
   newName: string
 ): TextDocumentEdit[] {
-  const decl = ws.definitionOf(skill)
-  const targets = [...ws.referencesTo(skill.name), decl]
+  const targets = ws.referencesTo(skill.name)
+  // Only edit the frontmatter when a name: value actually exists — the
+  // missing-name case must not fall back to injecting text at 0:0.
+  const entry = ws.entryOf(skill)
+  if (entry?.frontmatter?.nameRange) {
+    targets.push({ range: entry.frontmatter.nameRange, uri: entry.uri })
+  }
   const byUri = groupBy(targets, (loc) => loc.uri)
   return Object.entries(byUri).map(([uri, locs]) => ({
     edits: locs.map((loc) => ({ newText: newName, range: loc.range })),

@@ -2,6 +2,7 @@ import { type Dirent, readdirSync, readFileSync } from "node:fs"
 import { basename, dirname, join, relative, sep } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { minBy } from "es-toolkit"
+import ignore, { type Ignore } from "ignore"
 import {
   type Diagnostic,
   DiagnosticSeverity,
@@ -15,6 +16,8 @@ export const NAME_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/
 export const MAX_NAME_LENGTH = 64
 
 const SCAN_SEGMENTS = new Set([".claude", ".agents", ".codex", "skills"])
+/** Agent memory files reference skills from anywhere in the tree. */
+const SCAN_BASENAMES = new Set(["CLAUDE.md", "AGENTS.md"])
 const SKIP_DIRS = new Set(["node_modules", ".git", "dist", "build"])
 
 export type Skill = {
@@ -25,6 +28,8 @@ export type Skill = {
 }
 
 export type FileEntry = {
+  /** Line numbers inside fenced code blocks (used by completion). */
+  fenced: Set<number>
   frontmatter: Frontmatter | null
   path: string
   /** Set when this file is a `skills/<name>/SKILL.md`. */
@@ -39,14 +44,18 @@ export class Workspace {
   readonly files = new Map<string, FileEntry>()
   /** Keyed by canonical (folder) name; >1 entry means duplicates. */
   readonly skills = new Map<string, Skill[]>()
+  /** Patterns from the workspace-root .skillignore, if present. */
+  private ignored: Ignore | null
 
   constructor(rootUri: string) {
     this.root = fileURLToPath(rootUri)
+    this.ignored = loadSkillignore(this.root)
   }
 
   scan(): void {
     this.files.clear()
     this.skills.clear()
+    this.ignored = loadSkillignore(this.root)
     for (const path of walk(this.root)) {
       if (path.endsWith(".md") && this.inScope(path)) {
         this.indexFile(path, readFileSync(path, "utf8"))
@@ -59,7 +68,33 @@ export class Workspace {
     if (rel.startsWith("..")) {
       return false
     }
-    return rel.split(sep).some((seg) => SCAN_SEGMENTS.has(seg))
+    const segments = rel.split(sep)
+    if (this.ignored?.ignores(segments.join("/"))) {
+      return false
+    }
+    return (
+      segments.some((seg) => SCAN_SEGMENTS.has(seg)) ||
+      SCAN_BASENAMES.has(basename(path))
+    )
+  }
+
+  /** Re-read a file from disk into the index; drops it if unreadable. */
+  reindexPath(path: string): FileEntry | null {
+    try {
+      return this.indexFile(path, readFileSync(path, "utf8"))
+    } catch {
+      this.removeFile(pathToFileURL(path).toString())
+      return null
+    }
+  }
+
+  removeFile(uri: string): void {
+    const entry = this.files.get(uri)
+    if (!entry) {
+      return
+    }
+    this.removeSkill(entry)
+    this.files.delete(uri)
   }
 
   indexFile(path: string, text: string): FileEntry {
@@ -69,8 +104,8 @@ export class Workspace {
       this.removeSkill(previous)
     }
 
-    const { frontmatter, tokens } = parseDoc(text)
-    const entry: FileEntry = { frontmatter, path, tokens, uri }
+    const { fenced, frontmatter, tokens } = parseDoc(text)
+    const entry: FileEntry = { fenced, frontmatter, path, tokens, uri }
 
     const parent = dirname(path)
     if (
@@ -201,6 +236,18 @@ export class Workspace {
       }
     }
 
+    if (entry.skillFolder && !entry.frontmatter?.nameRange) {
+      out.push({
+        message: `SKILL.md is missing a frontmatter "name: ${entry.skillFolder}" field.`,
+        range: {
+          end: { character: 0, line: 0 },
+          start: { character: 0, line: 0 },
+        },
+        severity: DiagnosticSeverity.Error,
+        source: "skill-lsp",
+      })
+    }
+
     if (entry.skillFolder && entry.frontmatter?.nameRange) {
       const { name, nameRange } = entry.frontmatter
       if (name !== entry.skillFolder) {
@@ -227,6 +274,14 @@ export class Workspace {
     }
 
     return out
+  }
+}
+
+function loadSkillignore(root: string): Ignore | null {
+  try {
+    return ignore().add(readFileSync(join(root, ".skillignore"), "utf8"))
+  } catch {
+    return null
   }
 }
 

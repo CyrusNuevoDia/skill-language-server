@@ -12,9 +12,9 @@ impl zed::Extension for SkillLspExtension {
         _language_server_id: &zed::LanguageServerId,
         worktree: &zed::Worktree,
     ) -> Result<zed::Command> {
-        let command = worktree
-            .which("skill-lsp")
-            .unwrap_or_else(|| "/Users/knrz/.local/bin/skill-lsp".to_string());
+        let command = worktree.which("skill-lsp").ok_or_else(|| {
+            "skill-lsp not found on PATH — run `just bin` and make sure ~/.local/bin is on your PATH".to_string()
+        })?;
         Ok(zed::Command {
             command,
             args: vec!["--stdio".to_string()],

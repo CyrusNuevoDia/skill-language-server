@@ -26,6 +26,24 @@ test("typing / offers every skill with its description", async () => {
   expect(doc).toContain("Calculate shipping costs")
 })
 
+test("no completion after path segments", async () => {
+  await c.open(".claude/draft-path.md", "See docs/")
+  const res = await c.completion(".claude/draft-path.md", {
+    character: 9,
+    line: 0,
+  })
+  expect(completionItemsOf(res)).toEqual([])
+})
+
+test("no completion inside fenced code blocks", async () => {
+  await c.open(".claude/draft-fence.md", "```bash\ncat /\n```\n")
+  const res = await c.completion(".claude/draft-fence.md", {
+    character: 5,
+    line: 1,
+  })
+  expect(completionItemsOf(res)).toEqual([])
+})
+
 test("typing $ offers the same skills", async () => {
   await c.open(".claude/draft-dollar.md", "Use $")
   const items = completionItemsOf(
