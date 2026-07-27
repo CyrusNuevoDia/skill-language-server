@@ -1,0 +1,30 @@
+{
+  "name": "skill-lsp",
+  "displayName": "Skill LSP",
+  "description": "Go-to-definition, find-references, and cross-file rename for agent skill files (SKILL.md)",
+  "version": "0.0.1",
+  "publisher": "cyrusnuevodia",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CyrusNuevoDia/skill-lsp"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:markdown"
+  ],
+  "main": "./dist/extension.js",
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.0.0"
+  }
+}
