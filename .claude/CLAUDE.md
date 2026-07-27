@@ -47,7 +47,10 @@ Three server modules in `src/`, each a layer:
 - **workspace.ts** — the index. Walks the workspace once (`scan()`), keyed maps
   `files` (by URI) and `skills` (by name, array-valued to track duplicates).
   Scope rule lives in `inScope()`: a file is indexed iff its path contains a
-  `.claude`, `.agents`, `.codex`, or `skills` segment. Skill identity is the
+  `.claude`, `.agents`, `.codex`, or `skills` segment AND is not matched by a
+  workspace-root `.skillignore` (gitignore syntax; re-read on scan, so changes
+  need a language-server restart). This repo's own `.skillignore` excludes
+  `tests/fixtures/` so fixture skills don't pollute editors opening this repo. Skill identity is the
   FOLDER name; frontmatter `name:` disagreeing is a diagnostic, not an alias.
   All reported ranges cover the name part only, never the sigil.
 - **server.ts** — LSP wiring only; no logic that isn't protocol shaped. Rename
