@@ -1,4 +1,40 @@
 {
+  "name": "skill-lsp",
+  "version": "0.1.0",
+  "description": "Language server for agent skill files (SKILL.md): go-to-definition, find-references, cross-file rename, diagnostics, completion",
+  "keywords": [
+    "lsp",
+    "language-server",
+    "skills",
+    "skill",
+    "SKILL.md",
+    "claude",
+    "agents",
+    "markdown"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CyrusNuevoDia/skill-lsp.git"
+  },
+  "type": "module",
+  "bin": {
+    "skill-lsp": "dist/main.cjs"
+  },
+  "files": [
+    "dist/main.cjs"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "check": "ultracite check",
+    "fix": "ultracite fix",
+    "build:npm": "bun build --target=node --format=cjs --banner='#!/usr/bin/env node' --outfile=dist/main.cjs src/main.ts",
+    "prepublishOnly": "bun run build:npm"
+  },
   "dependencies": {
     "es-toolkit": "^1.50.0",
     "ignore": "^7.0.6",
@@ -13,15 +49,5 @@
     "typescript": "^7.0.2",
     "ultracite": "7.9.4",
     "vscode-languageserver-protocol": "^3.18.2"
-  },
-  "name": "skill-lsp",
-  "scripts": {
-    "test": "bun test",
-    "typecheck": "tsc --noEmit",
-    "check": "ultracite check",
-    "fix": "ultracite fix"
-  },
-  "type": "module",
-  "version": "0.0.1",
-  "private": true
+  }
 }

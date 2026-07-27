@@ -13,14 +13,25 @@ Agent skills are markdown files that reference each other — `/ship`, `$verify`
 
 It stays quiet where markdown demands it: fenced code blocks are never parsed — no references, no diagnostics, no completion popups (indented code blocks aren't detected; use fences). Multi-segment paths like `/usr/bin` and uppercase shell vars like `$PATH` are never references, and completion follows the same boundary rules, so typing `docs/` won't pop the skill list. Inline code spans *do* count — that's how people write skill names in prose — and unknown names produce nothing.
 
+skill-lsp is a language server, not a linter — pair it with `skill-lint` or `agnix` if you also want structural/security linting for your skills.
+
 ## Install
+
+The server for Zed, Neovim, and Helix:
+
+```sh
+npm install -g skill-lsp     # puts `skill-lsp` on your PATH
+```
+
+Or from a clone of this repo:
 
 ```sh
 mise trust && mise install   # toolchain: bun, just (rust too, used only for the Zed wasm)
 bun install                  # project dependencies
+just bin                     # → ~/.local/bin/skill-lsp; keep that on your PATH
 ```
 
-Zed, Neovim, and Helix launch a standalone server binary — build it once with `just bin`, which installs `~/.local/bin/skill-lsp`; keep that directory on your PATH. VS Code skips the binary: its extension bundles the server.
+VS Code needs neither: its extension bundles the server.
 
 ### VS Code
 
