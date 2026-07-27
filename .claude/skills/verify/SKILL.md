@@ -17,8 +17,13 @@ bun test
 - `tsc --noEmit -p ext/vscode` for the VS Code extension
 - `ultracite check` for linting
 
-`bun test` runs the 26 protocol-level LSP tests in `tests/` — definition, references, rename, will-rename, diagnostics, completion, and stdio transport — driving the server over real LSP requests/responses.
+`bun test` runs the protocol-level LSP tests in `tests/` — definition,
+references, rename, will-rename, watched files, diagnostics, completion,
+semantic tokens, document links, name grammar, `.skillignore`, and stdio
+transport — driving the server over real LSP requests/responses.
 
-A failure in any of these means the work is not done. Fix the root cause and re-run both commands until everything is green — never skip a failing check or ship past it.
+A failure in any of these means the work is not done. Fix the root cause and
+re-run both commands until everything is green — never skip a failing check or
+ship past it.
 
-Once green, use /ship to rebuild and install all editor artifacts.
+Once green, use /ship to build, install, release, and watch CI via a subagent.
