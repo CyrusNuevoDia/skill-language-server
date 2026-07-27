@@ -1,0 +1,280 @@
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
+import { PassThrough } from "node:stream"
+import { pathToFileURL } from "node:url"
+import { sortBy } from "es-toolkit"
+import { createConnection } from "vscode-languageserver/node"
+import {
+  type CompletionItem,
+  type CompletionList,
+  CompletionRequest,
+  DefinitionRequest,
+  type Diagnostic,
+  DidOpenTextDocumentNotification,
+  InitializedNotification,
+  InitializeRequest,
+  type Location,
+  type LocationLink,
+  type Position,
+  PrepareRenameRequest,
+  PublishDiagnosticsNotification,
+  type Range,
+  ReferencesRequest,
+  type RenameFile,
+  RenameRequest,
+  type TextEdit,
+  WillRenameFilesRequest,
+  type WorkspaceEdit,
+} from "vscode-languageserver-protocol"
+import {
+  createProtocolConnection,
+  type ProtocolConnection,
+  StreamMessageReader,
+  StreamMessageWriter,
+} from "vscode-languageserver-protocol/node"
+import { startServer } from "../src/server"
+
+export const WORKSPACE = resolve(import.meta.dir, "fixtures", "workspace")
+
+export function uriFor(rel: string): string {
+  return pathToFileURL(resolve(WORKSPACE, rel)).toString()
+}
+
+export function contentOf(rel: string): string {
+  return readFileSync(resolve(WORKSPACE, rel), "utf8")
+}
+
+/** Position of the nth occurrence of `needle` in a fixture file, plus `offset` chars. */
+export function posOf(
+  rel: string,
+  needle: string,
+  opts: { occurrence?: number; offset?: number } = {}
+): Position {
+  const { occurrence = 1, offset = 0 } = opts
+  const text = contentOf(rel)
+  let idx = -1
+  for (let i = 0; i < occurrence; i += 1) {
+    idx = text.indexOf(needle, idx + 1)
+    if (idx === -1) {
+      throw new Error(`"${needle}" (x${occurrence}) not found in ${rel}`)
+    }
+  }
+  const at = idx + offset
+  const before = text.slice(0, at)
+  const line = before.split("\n").length - 1
+  const character = at - (before.lastIndexOf("\n") + 1)
+  return { character, line }
+}
+
+/** Single-line range starting at posOf(...) spanning `length` chars. */
+export function rangeOf(
+  rel: string,
+  needle: string,
+  opts: { occurrence?: number; offset?: number; length: number }
+): Range {
+  const start = posOf(rel, needle, opts)
+  return {
+    end: { character: start.character + opts.length, line: start.line },
+    start,
+  }
+}
+
+export class Client {
+  readonly diagnostics = new Map<string, Diagnostic[]>()
+  readonly conn: ProtocolConnection
+
+  private constructor(conn: ProtocolConnection) {
+    this.conn = conn
+  }
+
+  static async start(): Promise<Client> {
+    const clientToServer = new PassThrough()
+    const serverToClient = new PassThrough()
+
+    startServer(createConnection(clientToServer, serverToClient))
+
+    const conn = createProtocolConnection(
+      new StreamMessageReader(serverToClient),
+      new StreamMessageWriter(clientToServer)
+    )
+    const client = new Client(conn)
+    conn.onNotification(PublishDiagnosticsNotification.type, (p) => {
+      client.diagnostics.set(p.uri, p.diagnostics)
+    })
+    conn.listen()
+
+    const rootUri = pathToFileURL(WORKSPACE).toString()
+    await conn.sendRequest(InitializeRequest.type, {
+      capabilities: {
+        textDocument: {
+          completion: {
+            completionItem: { documentationFormat: ["markdown", "plaintext"] },
+          },
+          publishDiagnostics: {},
+          rename: { prepareSupport: true },
+        },
+        workspace: {
+          fileOperations: { willRename: true },
+          workspaceEdit: {
+            documentChanges: true,
+            resourceOperations: ["create", "rename", "delete"],
+          },
+          workspaceFolders: true,
+        },
+      },
+      processId: null,
+      rootUri,
+      workspaceFolders: [{ name: "fixture", uri: rootUri }],
+    })
+    await conn.sendNotification(InitializedNotification.type, {})
+    return client
+  }
+
+  stop(): void {
+    this.conn.dispose()
+  }
+
+  open(rel: string, text?: string): Promise<void> {
+    return this.conn.sendNotification(DidOpenTextDocumentNotification.type, {
+      textDocument: {
+        languageId: "markdown",
+        text: text ?? contentOf(rel),
+        uri: uriFor(rel),
+        version: 1,
+      },
+    })
+  }
+
+  definition(rel: string, position: Position) {
+    return this.conn.sendRequest(DefinitionRequest.type, {
+      position,
+      textDocument: { uri: uriFor(rel) },
+    })
+  }
+
+  references(rel: string, position: Position, includeDeclaration = false) {
+    return this.conn.sendRequest(ReferencesRequest.type, {
+      context: { includeDeclaration },
+      position,
+      textDocument: { uri: uriFor(rel) },
+    })
+  }
+
+  prepareRename(rel: string, position: Position) {
+    return this.conn.sendRequest(PrepareRenameRequest.type, {
+      position,
+      textDocument: { uri: uriFor(rel) },
+    })
+  }
+
+  rename(rel: string, position: Position, newName: string) {
+    return this.conn.sendRequest(RenameRequest.type, {
+      newName,
+      position,
+      textDocument: { uri: uriFor(rel) },
+    })
+  }
+
+  willRenameFolder(oldRel: string, newRel: string) {
+    return this.conn.sendRequest(WillRenameFilesRequest.type, {
+      files: [{ newUri: uriFor(newRel), oldUri: uriFor(oldRel) }],
+    })
+  }
+
+  completion(rel: string, position: Position) {
+    return this.conn.sendRequest(CompletionRequest.type, {
+      position,
+      textDocument: { uri: uriFor(rel) },
+    })
+  }
+
+  /** Wait until the server has published diagnostics (possibly empty) for a file. */
+  async diagnosticsFor(rel: string, timeoutMs = 3000): Promise<Diagnostic[]> {
+    const uri = uriFor(rel)
+    const deadline = Date.now() + timeoutMs
+    for (;;) {
+      const published = this.diagnostics.get(uri)
+      if (published) {
+        return published
+      }
+      if (Date.now() > deadline) {
+        throw new Error(`no diagnostics published for ${rel}`)
+      }
+      // biome-ignore lint/performance/noAwaitInLoops: polling until the server publishes
+      await new Promise((r) => setTimeout(r, 25))
+    }
+  }
+}
+
+// ---- result normalizers ------------------------------------------------
+
+/** Normalize Definition | Location[] | LocationLink[] | null to Location[]. */
+export function asLocations(res: unknown): Location[] {
+  if (!res) {
+    return []
+  }
+  const arr = (Array.isArray(res) ? res : [res]) as (Location | LocationLink)[]
+  return arr.map((l) =>
+    "targetUri" in l
+      ? { range: l.targetSelectionRange ?? l.targetRange, uri: l.targetUri }
+      : l
+  )
+}
+
+export function sortLocs(locs: Location[]): Location[] {
+  return sortBy(locs, [
+    (l) => l.uri,
+    (l) => l.range.start.line,
+    (l) => l.range.start.character,
+  ])
+}
+
+export type FlatEdit = {
+  newText: string
+  range: Range
+  uri: string
+}
+
+export function textEditsOf(we: WorkspaceEdit): FlatEdit[] {
+  const out: FlatEdit[] = []
+  for (const dc of we.documentChanges ?? []) {
+    if ("textDocument" in dc) {
+      for (const e of dc.edits as TextEdit[]) {
+        out.push({
+          newText: e.newText,
+          range: e.range,
+          uri: dc.textDocument.uri,
+        })
+      }
+    }
+  }
+  for (const [uri, edits] of Object.entries(we.changes ?? {})) {
+    for (const e of edits) {
+      out.push({ newText: e.newText, range: e.range, uri })
+    }
+  }
+  return sortEdits(out)
+}
+
+export function sortEdits(edits: FlatEdit[]): FlatEdit[] {
+  return sortBy(edits, [
+    (e) => e.uri,
+    (e) => e.range.start.line,
+    (e) => e.range.start.character,
+  ])
+}
+
+export function renameFilesOf(
+  we: WorkspaceEdit
+): Array<{ oldUri: string; newUri: string }> {
+  return (we.documentChanges ?? [])
+    .filter((dc): dc is RenameFile => "kind" in dc && dc.kind === "rename")
+    .map((r) => ({ newUri: r.newUri, oldUri: r.oldUri }))
+}
+
+export function completionItemsOf(res: unknown): CompletionItem[] {
+  if (!res) {
+    return []
+  }
+  return Array.isArray(res) ? res : ((res as CompletionList).items ?? [])
+}
