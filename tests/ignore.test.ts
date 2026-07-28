@@ -1,17 +1,13 @@
-import { afterAll, beforeAll, expect, test } from "bun:test"
+import { expect, test } from "bun:test"
 import {
   asLocations,
-  Client,
   completionItemsOf,
   posOf,
+  startClient,
   uriFor,
-} from "./harness"
+} from "./_harness"
 
-let c: Client
-beforeAll(async () => {
-  c = await Client.start()
-})
-afterAll(() => c.stop())
+const c = await startClient()
 
 test("skills under .skillignore'd dirs are not offered in completion", async () => {
   await c.open(".claude/draft-ignore.md", "Try /")

@@ -1,3 +1,4 @@
+import { afterAll } from "bun:test"
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { PassThrough } from "node:stream"
@@ -65,21 +66,18 @@ export const DEFAULT_CAPABILITIES: ClientCapabilities = {
   },
 }
 
-export function uriFor(rel: string): string {
-  return pathToFileURL(resolve(WORKSPACE, rel)).toString()
-}
+export const uriFor = (rel: string): string =>
+  pathToFileURL(resolve(WORKSPACE, rel)).toString()
 
-export function contentOf(rel: string): string {
-  return readFileSync(resolve(WORKSPACE, rel), "utf8")
-}
+export const contentOf = (rel: string): string =>
+  readFileSync(resolve(WORKSPACE, rel), "utf8")
 
 /** Position of the nth occurrence of `needle` in a fixture file, plus `offset` chars. */
 export function posOf(
   rel: string,
   needle: string,
-  opts: { occurrence?: number; offset?: number } = {}
+  { occurrence = 1, offset = 0 }: { occurrence?: number; offset?: number } = {}
 ): Position {
-  const { occurrence = 1, offset = 0 } = opts
   const text = contentOf(rel)
   let idx = -1
   for (let i = 0; i < occurrence; i += 1) {
@@ -160,11 +158,11 @@ export class Client {
     this.conn.dispose()
   }
 
-  open(rel: string, text?: string): Promise<void> {
-    return this.conn.sendNotification(DidOpenTextDocumentNotification.type, {
+  async open(rel: string, text?: string): Promise<void> {
+    await this.conn.sendNotification(DidOpenTextDocumentNotification.type, {
       textDocument: {
         languageId: "markdown",
-        text: text ?? readFileSync(resolve(this.root, rel), "utf8"),
+        text: text ?? (await Bun.file(resolve(this.root, rel)).text()),
         uri: this.uriFor(rel),
         version: 1,
       },
@@ -249,7 +247,7 @@ export class Client {
   async diagnosticsFor(rel: string, timeoutMs = 3000): Promise<Diagnostic[]> {
     const uri = this.uriFor(rel)
     const deadline = Date.now() + timeoutMs
-    for (; ;) {
+    for (;;) {
       const published = this.diagnostics.get(uri)
       if (published) {
         return published
@@ -258,9 +256,19 @@ export class Client {
         throw new Error(`no diagnostics published for ${rel}`)
       }
       // biome-ignore lint/performance/noAwaitInLoops: polling until the server publishes
-      await new Promise((r) => setTimeout(r, 25))
+      await Bun.sleep(25)
     }
   }
+}
+
+/** Start a Client scoped to the calling test file: stopped in its afterAll. */
+export async function startClient(
+  root: string = WORKSPACE,
+  capabilities: ClientCapabilities = DEFAULT_CAPABILITIES
+): Promise<Client> {
+  const client = await Client.start(root, capabilities)
+  afterAll(() => client.stop())
+  return client
 }
 
 // ---- result normalizers ------------------------------------------------
@@ -278,13 +286,15 @@ export function asLocations(res: unknown): Location[] {
   )
 }
 
-export function sortLocs(locs: Location[]): Location[] {
-  return sortBy(locs, [
-    (l) => l.uri,
-    (l) => l.range.start.line,
-    (l) => l.range.start.character,
+/** Sort anything uri-and-range-shaped (Locations, FlatEdits) into a stable order. */
+export const sortByPos = <T extends { uri: string; range: Range }>(
+  items: T[]
+): T[] =>
+  sortBy(items, [
+    (x) => x.uri,
+    (x) => x.range.start.line,
+    (x) => x.range.start.character,
   ])
-}
 
 export type FlatEdit = {
   newText: string
@@ -310,24 +320,15 @@ export function textEditsOf(we: WorkspaceEdit): FlatEdit[] {
       out.push({ newText: e.newText, range: e.range, uri })
     }
   }
-  return sortEdits(out)
+  return sortByPos(out)
 }
 
-export function sortEdits(edits: FlatEdit[]): FlatEdit[] {
-  return sortBy(edits, [
-    (e) => e.uri,
-    (e) => e.range.start.line,
-    (e) => e.range.start.character,
-  ])
-}
-
-export function renameFilesOf(
+export const renameFilesOf = (
   we: WorkspaceEdit
-): Array<{ oldUri: string; newUri: string }> {
-  return (we.documentChanges ?? [])
+): Array<{ oldUri: string; newUri: string }> =>
+  (we.documentChanges ?? [])
     .filter((dc): dc is RenameFile => "kind" in dc && dc.kind === "rename")
     .map((r) => ({ newUri: r.newUri, oldUri: r.oldUri }))
-}
 
 export function completionItemsOf(res: unknown): CompletionItem[] {
   if (!res) {

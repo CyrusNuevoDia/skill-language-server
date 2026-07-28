@@ -1,12 +1,8 @@
-import { afterAll, beforeAll, expect, test } from "bun:test"
+import { expect, test } from "bun:test"
+import { posOf, sortByPos, startClient } from "./_harness"
 import { BILLING_REFS, locOf, SHIPPING_DECL, SHIPPING_REFS } from "./corpus"
-import { Client, posOf, sortLocs } from "./harness"
 
-let c: Client
-beforeAll(async () => {
-  c = await Client.start()
-})
-afterAll(() => c.stop())
+const c = await startClient()
 
 test("references from the definition (frontmatter name)", async () => {
   const res = await c.references(
@@ -15,7 +11,7 @@ test("references from the definition (frontmatter name)", async () => {
       offset: SHIPPING_DECL.offset + 2,
     })
   )
-  expect(sortLocs(res ?? [])).toEqual(sortLocs(SHIPPING_REFS.map(locOf)))
+  expect(sortByPos(res ?? [])).toEqual(sortByPos(SHIPPING_REFS.map(locOf)))
 })
 
 test("references with includeDeclaration adds the frontmatter name", async () => {
@@ -26,8 +22,8 @@ test("references with includeDeclaration adds the frontmatter name", async () =>
     }),
     true
   )
-  expect(sortLocs(res ?? [])).toEqual(
-    sortLocs([...SHIPPING_REFS, SHIPPING_DECL].map(locOf))
+  expect(sortByPos(res ?? [])).toEqual(
+    sortByPos([...SHIPPING_REFS, SHIPPING_DECL].map(locOf))
   )
 })
 
@@ -36,7 +32,7 @@ test("references from a reference position returns the same set", async () => {
     ".claude/CLAUDE.md",
     posOf(".claude/CLAUDE.md", "/shipping", { offset: 3 })
   )
-  expect(sortLocs(res ?? [])).toEqual(sortLocs(SHIPPING_REFS.map(locOf)))
+  expect(sortByPos(res ?? [])).toEqual(sortByPos(SHIPPING_REFS.map(locOf)))
 })
 
 test("billing references exclude fenced code and out-of-scope files", async () => {
@@ -44,5 +40,5 @@ test("billing references exclude fenced code and out-of-scope files", async () =
     ".codex/AGENTS.md",
     posOf(".codex/AGENTS.md", "/billing", { offset: 2 })
   )
-  expect(sortLocs(res ?? [])).toEqual(sortLocs(BILLING_REFS.map(locOf)))
+  expect(sortByPos(res ?? [])).toEqual(sortByPos(BILLING_REFS.map(locOf)))
 })

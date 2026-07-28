@@ -1,22 +1,19 @@
-import { afterAll, beforeAll, expect, test } from "bun:test"
+import { expect, test } from "bun:test"
 import type { WorkspaceEdit } from "vscode-languageserver-protocol"
-import { expectedShippingEdits, SHIPPING_DECL } from "./corpus"
 import {
   Client,
   posOf,
   rangeOf,
   renameFilesOf,
-  sortEdits,
+  sortByPos,
+  startClient,
   textEditsOf,
   uriFor,
   WORKSPACE,
-} from "./harness"
+} from "./_harness"
+import { expectedShippingEdits, SHIPPING_DECL } from "./corpus"
 
-let c: Client
-beforeAll(async () => {
-  c = await Client.start()
-})
-afterAll(() => c.stop())
+const c = await startClient()
 
 test("prepareRename on a reference returns name-only range + placeholder", async () => {
   const res = await c.prepareRename(
@@ -54,11 +51,10 @@ test("rename from a reference: folder RenameFile + frontmatter + all references"
   // The folder rename must come after the text edits that touch old paths.
   const dcs = we.documentChanges ?? []
   expect(dcs.length).toBeGreaterThan(0)
-  const last = dcs.at(-1) as any
-  expect(last.kind).toBe("rename")
+  expect(dcs.at(-1)).toMatchObject({ kind: "rename" })
 
   expect(textEditsOf(we)).toEqual(
-    sortEdits(expectedShippingEdits("express-shipping"))
+    sortByPos(expectedShippingEdits("express-shipping"))
   )
 })
 
@@ -78,7 +74,7 @@ test("rename triggered from the frontmatter name value produces the same edit", 
     },
   ])
   expect(textEditsOf(we)).toEqual(
-    sortEdits(expectedShippingEdits("express-shipping"))
+    sortByPos(expectedShippingEdits("express-shipping"))
   )
 })
 
@@ -135,7 +131,7 @@ test("a client with neither documentChanges nor resourceOperations gets a plain 
     )) as WorkspaceEdit
     expect(we.documentChanges).toBeUndefined()
     expect(textEditsOf(we)).toEqual(
-      sortEdits(expectedShippingEdits("express-shipping"))
+      sortByPos(expectedShippingEdits("express-shipping"))
     )
   } finally {
     minimal.stop()

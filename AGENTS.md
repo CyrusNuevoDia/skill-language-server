@@ -107,7 +107,7 @@ Three server modules in `src/`, each a layer:
   request round-trip (the test harness's `settle()`) prove that all earlier
   notifications' effects, including publishes, have landed.
 
-Tests are protocol-level, not unit-level: `tests/harness.ts` boots the real
+Tests are protocol-level, not unit-level: `tests/_harness.ts` boots the real
 server over in-memory streams and speaks JSON-RPC to it. `tests/corpus.ts` is
 the ground truth of every reference in the fixture workspace
 (`tests/fixtures/workspace/`) — if you add/move a reference in a fixture,

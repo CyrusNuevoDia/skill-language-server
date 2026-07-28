@@ -1,21 +1,17 @@
-import { afterAll, beforeAll, expect, test } from "bun:test"
+import { expect, test } from "bun:test"
+import { asLocations, posOf, startClient } from "./_harness"
 import { locOf, SHIPPING_DECL } from "./corpus"
-import { asLocations, Client, posOf } from "./harness"
 
-let c: Client
-beforeAll(async () => {
-  c = await Client.start()
-})
-afterAll(() => c.stop())
+const c = await startClient()
 
-const shippingDef = [locOf(SHIPPING_DECL)]
+const SHIPPING_DEF = [locOf(SHIPPING_DECL)]
 
 test("definition from /shipping prose reference", async () => {
   const res = await c.definition(
     ".claude/skills/billing/SKILL.md",
     posOf(".claude/skills/billing/SKILL.md", "/shipping", { offset: 3 })
   )
-  expect(asLocations(res)).toEqual(shippingDef)
+  expect(asLocations(res)).toEqual(SHIPPING_DEF)
 })
 
 test("definition works with cursor on the sigil itself", async () => {
@@ -23,7 +19,7 @@ test("definition works with cursor on the sigil itself", async () => {
     ".claude/CLAUDE.md",
     posOf(".claude/CLAUDE.md", "/shipping", { offset: 0 })
   )
-  expect(asLocations(res)).toEqual(shippingDef)
+  expect(asLocations(res)).toEqual(SHIPPING_DEF)
 })
 
 test("definition from $shipping reference", async () => {
@@ -31,7 +27,7 @@ test("definition from $shipping reference", async () => {
     ".claude/agents/reviewer.md",
     posOf(".claude/agents/reviewer.md", "$shipping", { offset: 4 })
   )
-  expect(asLocations(res)).toEqual(shippingDef)
+  expect(asLocations(res)).toEqual(SHIPPING_DEF)
 })
 
 test("definition from reference inside inline code span", async () => {
@@ -42,7 +38,7 @@ test("definition from reference inside inline code span", async () => {
       offset: 3,
     })
   )
-  expect(asLocations(res)).toEqual(shippingDef)
+  expect(asLocations(res)).toEqual(SHIPPING_DEF)
 })
 
 test("no definition inside fenced code blocks", async () => {

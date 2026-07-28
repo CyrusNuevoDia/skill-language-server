@@ -1,12 +1,8 @@
-import { afterAll, beforeAll, expect, test } from "bun:test"
+import { expect, test } from "bun:test"
 import { DiagnosticSeverity } from "vscode-languageserver-protocol"
-import { Client, contentOf, rangeOf, uriFor } from "./harness"
+import { contentOf, rangeOf, startClient, uriFor } from "./_harness"
 
-let c: Client
-beforeAll(async () => {
-  c = await Client.start()
-})
-afterAll(() => c.stop())
+const c = await startClient()
 
 test("near-miss reference gets a did-you-mean warning; other unknown references get an info hint", async () => {
   const diags = await c.diagnosticsFor(".claude/skills/typo-source/SKILL.md")
@@ -85,8 +81,8 @@ test("SKILL.md with no frontmatter name gets a missing-name error", async () => 
   const diags = await c.diagnosticsFor(".claude/skills/noname/SKILL.md")
   expect(diags).toHaveLength(1)
   expect(diags[0].severity).toBe(DiagnosticSeverity.Error)
-  expect(String(diags[0].message)).toContain("name")
-  expect(String(diags[0].message)).toContain("noname")
+  expect(diags[0].message).toContain("name")
+  expect(diags[0].message).toContain("noname")
 })
 
 test("clean files never receive a publish, not even an empty one", async () => {

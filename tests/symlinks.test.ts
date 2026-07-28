@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test"
+import { expect, test } from "bun:test"
 import {
   mkdirSync,
   mkdtempSync,
@@ -8,13 +8,9 @@ import {
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { asLocations, Client, rangeOf, uriFor } from "./harness"
+import { asLocations, Client, rangeOf, startClient, uriFor } from "./_harness"
 
-let c: Client
-beforeAll(async () => {
-  c = await Client.start()
-})
-afterAll(() => c.stop())
+const c = await startClient()
 
 test("definition through a symlinked skill folder uses the symlink-side URI", async () => {
   await c.open(".claude/linked-adhoc.md", "Use /linked here.\n")

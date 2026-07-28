@@ -1,5 +1,5 @@
-import { afterAll, beforeAll, expect, test } from "bun:test"
-import { Client, posOf } from "./harness"
+import { expect, test } from "bun:test"
+import { posOf, startClient } from "./_harness"
 
 type DecodedToken = { character: number; length: number; line: number }
 
@@ -16,11 +16,7 @@ function decode(data: number[]): DecodedToken[] {
   return tokens
 }
 
-let c: Client
-beforeAll(async () => {
-  c = await Client.start()
-})
-afterAll(() => c.stop())
+const c = await startClient()
 
 test("semantic tokens cover resolved /shipping references", async () => {
   const rel = ".claude/skills/billing/SKILL.md"

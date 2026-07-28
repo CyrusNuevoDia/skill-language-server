@@ -1,13 +1,9 @@
-import { afterAll, beforeAll, expect, test } from "bun:test"
+import { expect, test } from "bun:test"
 import type { WorkspaceEdit } from "vscode-languageserver-protocol"
+import { renameFilesOf, sortByPos, startClient, textEditsOf } from "./_harness"
 import { expectedShippingEdits } from "./corpus"
-import { Client, renameFilesOf, sortEdits, textEditsOf } from "./harness"
 
-let c: Client
-beforeAll(async () => {
-  c = await Client.start()
-})
-afterAll(() => c.stop())
+const c = await startClient()
 
 test("renaming a skill with no frontmatter name never injects text at 0:0", async () => {
   // Regression: the frontmatter edit used to fall back to a zero range,
@@ -29,5 +25,5 @@ test("renaming the skill folder in the explorer updates frontmatter + references
   // The client is performing the folder rename itself — no RenameFile op.
   expect(renameFilesOf(we)).toEqual([])
   // Edits reference OLD paths: the client applies them before moving files.
-  expect(textEditsOf(we)).toEqual(sortEdits(expectedShippingEdits("overnight")))
+  expect(textEditsOf(we)).toEqual(sortByPos(expectedShippingEdits("overnight")))
 })

@@ -1,24 +1,20 @@
-import { afterAll, beforeAll, expect, test } from "bun:test"
+import { expect, test } from "bun:test"
 import type { WorkspaceEdit } from "vscode-languageserver-protocol"
 import {
   asLocations,
-  Client,
   completionItemsOf,
   posOf,
   rangeOf,
   renameFilesOf,
-  sortLocs,
+  sortByPos,
+  startClient,
   textEditsOf,
   uriFor,
-} from "./harness"
+} from "./_harness"
 
-let c: Client
-beforeAll(async () => {
-  c = await Client.start()
-})
-afterAll(() => c.stop())
+const c = await startClient()
 
-const dataSyncDef = {
+const DATA_SYNC_DEF = {
   range: rangeOf(".claude/skills/data_sync/SKILL.md", "name: data_sync", {
     length: 9,
     offset: 6,
@@ -35,8 +31,8 @@ test("underscore names resolve: /data_sync and $data_sync", async () => {
     ".claude/team.md",
     posOf(".claude/team.md", "$data_sync", { offset: 4 })
   )
-  expect(asLocations(slash)).toEqual([dataSyncDef])
-  expect(asLocations(dollar)).toEqual([dataSyncDef])
+  expect(asLocations(slash)).toEqual([DATA_SYNC_DEF])
+  expect(asLocations(dollar)).toEqual([DATA_SYNC_DEF])
 })
 
 test("colon names resolve: /report:weekly", async () => {
@@ -72,8 +68,8 @@ test("references find underscore-named skills", async () => {
     ".claude/team.md",
     posOf(".claude/team.md", "/data_sync", { offset: 4 })
   )
-  expect(sortLocs(res ?? [])).toEqual(
-    sortLocs([
+  expect(sortByPos(res ?? [])).toEqual(
+    sortByPos([
       {
         range: rangeOf(".claude/team.md", "/data_sync", {
           length: 9,

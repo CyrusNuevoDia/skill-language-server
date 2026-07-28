@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test"
+import { expect, test } from "bun:test"
 import { cpSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -6,16 +6,11 @@ import {
   DidChangeWatchedFilesNotification,
   FileChangeType,
 } from "vscode-languageserver-protocol"
-import { Client, WORKSPACE } from "./harness"
+import { startClient, WORKSPACE } from "./_harness"
 
-let root: string
-let c: Client
-beforeAll(async () => {
-  root = mkdtempSync(join(tmpdir(), "skill-language-server-reload-"))
-  cpSync(WORKSPACE, root, { recursive: true })
-  c = await Client.start(root)
-})
-afterAll(() => c.stop())
+const root = mkdtempSync(join(tmpdir(), "skill-language-server-reload-"))
+cpSync(WORKSPACE, root, { recursive: true })
+const c = await startClient(root)
 
 test("adding a path to .skillignore clears its on-screen diagnostics", async () => {
   const typoRel = ".claude/skills/typo-source/SKILL.md"

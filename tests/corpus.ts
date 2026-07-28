@@ -1,5 +1,5 @@
 import type { Location } from "vscode-languageserver-protocol"
-import { type FlatEdit, rangeOf, uriFor } from "./harness"
+import { type FlatEdit, rangeOf, uriFor } from "./_harness"
 
 /**
  * Ground truth for the fixture workspace: every reference to `shipping` the
@@ -65,25 +65,22 @@ export const BILLING_REFS: RefSpec[] = [
   { length: 7, needle: "/billing", offset: 1, rel: ".codex/AGENTS.md" },
 ]
 
-export function locOf(spec: RefSpec): Location {
-  return {
-    range: rangeOf(spec.rel, spec.needle, {
-      length: spec.length,
-      occurrence: spec.occurrence,
-      offset: spec.offset,
-    }),
-    uri: uriFor(spec.rel),
-  }
-}
+export const locOf = (spec: RefSpec): Location => ({
+  range: rangeOf(spec.rel, spec.needle, {
+    length: spec.length,
+    occurrence: spec.occurrence,
+    offset: spec.offset,
+  }),
+  uri: uriFor(spec.rel),
+})
 
-export function editOf(spec: RefSpec, newText: string): FlatEdit {
-  return { ...locOf(spec), newText }
-}
+export const editOf = (spec: RefSpec, newText: string): FlatEdit => ({
+  ...locOf(spec),
+  newText,
+})
 
 /** All text edits a rename of `shipping` must produce (references + frontmatter). */
-export function expectedShippingEdits(newName: string): FlatEdit[] {
-  return [
-    ...SHIPPING_REFS.map((s) => editOf(s, newName)),
-    editOf(SHIPPING_DECL, newName),
-  ]
-}
+export const expectedShippingEdits = (newName: string): FlatEdit[] => [
+  ...SHIPPING_REFS.map((s) => editOf(s, newName)),
+  editOf(SHIPPING_DECL, newName),
+]

@@ -1,23 +1,18 @@
-import { afterAll, beforeAll, expect, test } from "bun:test"
+import { expect, test } from "bun:test"
 import {
   DidChangeWatchedFilesNotification,
   FileChangeType,
 } from "vscode-languageserver-protocol"
-import { asLocations, Client, posOf, uriFor } from "./harness"
+import { asLocations, posOf, startClient, uriFor } from "./_harness"
 
-let c: Client
-beforeAll(async () => {
-  c = await Client.start()
-})
-afterAll(() => c.stop())
+const c = await startClient()
 
-const billingSkill = ".claude/skills/billing/SKILL.md"
+const BILLING_SKILL = ".claude/skills/billing/SKILL.md"
 
-function notifyChange(type: FileChangeType) {
-  return c.conn.sendNotification(DidChangeWatchedFilesNotification.type, {
-    changes: [{ type, uri: uriFor(billingSkill) }],
+const notifyChange = (type: FileChangeType) =>
+  c.conn.sendNotification(DidChangeWatchedFilesNotification.type, {
+    changes: [{ type, uri: uriFor(BILLING_SKILL) }],
   })
-}
 
 test("watcher events never override open buffers", async () => {
   // Buffer has the /shipping ref on line 3; the on-disk file has it on line 2.

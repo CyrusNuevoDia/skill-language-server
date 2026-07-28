@@ -1,11 +1,7 @@
-import { afterAll, beforeAll, expect, test } from "bun:test"
-import { Client, completionItemsOf } from "./harness"
+import { expect, test } from "bun:test"
+import { completionItemsOf, startClient } from "./_harness"
 
-let c: Client
-beforeAll(async () => {
-  c = await Client.start()
-})
-afterAll(() => c.stop())
+const c = await startClient()
 
 test("typing / offers every skill with its description", async () => {
   await c.open(".claude/draft.md", "Use /")
