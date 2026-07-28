@@ -1,7 +1,3 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## What this is
 
 An LSP server for agent skill files (`skills/<name>/SKILL.md`): go-to-definition,
@@ -34,6 +30,17 @@ declaring anything done. After server changes, refresh installed clients:
 
 TypeScript is v7 (native compiler): `@types/*` packages must be listed
 explicitly in each tsconfig's `"types"` field — they are not auto-discovered.
+
+## Coding style
+
+Formatting/lint is ultracite's job — `just fmt`, never hand-fix. The
+conventions a formatter can't see are written down in `docs/typescript.md`
+(function shape, naming, arktype/arkregex/es-toolkit idioms, the tsc-v7
+never-CFA gotcha) and `docs/bun.md` (Bun `$`/`Bun.file` idioms for
+`scripts/`). Read them before writing code. The load-bearing boundary:
+`src/` and `ext/` must stay Node-compatible (`node:*` imports only, no Bun
+globals — they ship to npm, the VS Code extension host, and Zed's Node);
+`scripts/` is Bun-native and typechecked via the root tsconfig.
 
 ## Architecture
 
