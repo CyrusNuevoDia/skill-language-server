@@ -1,6 +1,7 @@
 # skill-language-server
 
 [![npm](https://img.shields.io/npm/v/skill-language-server)](https://www.npmjs.com/package/skill-language-server)
+[![Zed](https://img.shields.io/badge/Zed-extension-084CCF)](https://zed.dev/extensions/skill-language-server)
 [![CI](https://github.com/CyrusNuevoDia/skill-language-server/actions/workflows/ci.yml/badge.svg)](https://github.com/CyrusNuevoDia/skill-language-server/actions/workflows/ci.yml)
 
 A language server for agent skills — `/skill-name` and `$skill-name` become real symbols in VS Code, Zed, Neovim, and Helix.
@@ -28,42 +29,9 @@ It's a language server, not a linter — pair with `skill-lint` or `agnix` for s
 
 ## Install
 
-```sh
-npm install -g skill-language-server
-```
+[VS Code](#vs-code) · [Zed](#zed) · [Neovim](#neovim-011) · [Helix](#helix) · [from source](#from-source)
 
-Then wire up your editor below. To see it work: cursor on any `/skill-name`, hit `F2`, type a new name — folder, frontmatter, and every reference update as one undo step.
-
-### Helix
-
-```toml
-# languages.toml
-[language-server.skill-language-server]
-command = "skill-language-server"
-args = ["--stdio"]
-
-[[language]]
-name = "markdown"
-language-servers = ["skill-language-server"]  # add e.g. "marksman" here if you use it
-```
-
-### Neovim (0.11+)
-
-Create `~/.config/nvim/lsp/skill-language-server.lua`:
-
-```lua
-return {
-  cmd = { "skill-language-server", "--stdio" },
-  filetypes = { "markdown" },
-  root_markers = { ".claude", ".git" },
-}
-```
-
-Add `vim.lsp.enable("skill-language-server")` to init.lua. (Or from a clone: `{ dir = "/path/to/skill-language-server/ext/nvim" }` in lazy.nvim.)
-
-### Zed
-
-Command palette → `zed: install dev extension` → select `ext/zed/` from a clone. After server updates: `editor: restart language server`.
+Once installed: cursor on any `/skill-name`, hit `F2`, type a new name — folder, frontmatter, and every reference update as one undo step.
 
 ### VS Code
 
@@ -76,6 +44,54 @@ code --install-extension dist/skill-language-server.vsix
 ```
 
 (Marketplace listing pending — the .vsix bundles the server.)
+
+### Zed
+
+[**Install the extension**](https://zed.dev/extensions/skill-language-server) — or `cmd-shift-x` → search *Skill Language Server*. It fetches the server itself; nothing else to install.
+
+From a clone instead: command palette → `zed: install dev extension` → select `ext/zed/`. After server updates, `editor: restart language server`.
+
+### Neovim (0.11+)
+
+1. Install the server:
+
+   ```sh
+   npm install -g skill-language-server
+   ```
+
+2. Create `~/.config/nvim/lsp/skill-language-server.lua`:
+
+   ```lua
+   return {
+     cmd = { "skill-language-server", "--stdio" },
+     filetypes = { "markdown" },
+     root_markers = { ".claude", ".git" },
+   }
+   ```
+
+3. Add `vim.lsp.enable("skill-language-server")` to init.lua.
+
+(Or from a clone, skipping steps 1–2: `{ dir = "/path/to/skill-language-server/ext/nvim" }` in lazy.nvim.)
+
+### Helix
+
+1. Install the server:
+
+   ```sh
+   npm install -g skill-language-server
+   ```
+
+2. Add to `languages.toml`:
+
+   ```toml
+   [language-server.skill-language-server]
+   command = "skill-language-server"
+   args = ["--stdio"]
+
+   [[language]]
+   name = "markdown"
+   language-servers = ["skill-language-server"]  # add e.g. "marksman" here if you use it
+   ```
 
 ### From source
 
