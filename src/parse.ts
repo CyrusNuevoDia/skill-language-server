@@ -60,7 +60,12 @@ const closesFence = (line: string, opening: string): boolean =>
   FENCE_CLOSE.exec(line)?.[1].startsWith(opening) === true
 
 export function parseDoc(text: string): ParsedDoc {
-  const lines = text.split("\n")
+  // CRLF documents must scan like LF ones: a trailing \r would make the
+  // $-anchored FENCE_CLOSE (and NAME_LINE) miss, leaving fences unclosed.
+  // Tokens are unaffected — \r can only trail, past any token's range.
+  const lines = text
+    .split("\n")
+    .map((line) => (line.endsWith("\r") ? line.slice(0, -1) : line))
   const frontmatter = parseFrontmatter(text, lines)
 
   const tokens: Token[] = []
@@ -137,9 +142,14 @@ function parseFrontmatter(text: string, lines: string[]): Frontmatter | null {
     if (m) {
       // Anchor to the YAML-parsed value when it appears verbatim, so quotes
       // and trailing comments stay outside the range; else the raw capture.
+      // Search past the key: a short value ("name: a", "name: name") also
+      // occurs inside the literal text "name:" itself.
+      const keyEnd = "name:".length
       const value =
-        fields.name && lines[i].includes(fields.name) ? fields.name : m[1]
-      const col = lines[i].indexOf(value)
+        fields.name && lines[i].includes(fields.name, keyEnd)
+          ? fields.name
+          : m[1]
+      const col = lines[i].indexOf(value, keyEnd)
       nameRange = rangeIn(i, col, col + value.length)
       break
     }
