@@ -22,8 +22,8 @@ import {
 } from "@/parse"
 import { containsPos, distance, uriOf, ZERO_RANGE } from "@/utils"
 
-/** Full-string variant of the token grammar, plus the length cap for renames. */
-export const SkillName = type(new RegExp(`^${NAME_PATTERN}$`)).atMostLength(64)
+/** Full-string variant of the token grammar. */
+export const SkillName = type(new RegExp(`^${NAME_PATTERN}$`))
 export type SkillName = typeof SkillName.infer
 
 const SCAN_SEGMENTS = new Set([".claude", ".agents", ".codex", "skills"])
