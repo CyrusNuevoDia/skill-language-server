@@ -113,7 +113,7 @@ The server's world is the folder your editor opened — it never reads outside i
 - **Skills** = any `**/skills/<name>/SKILL.md`. Folder name is canonical; a disagreeing frontmatter `name:` is an error, not an alias
 - **References** are scanned in `.md` files under `.claude/`, `.agents/`, `.codex/`, or `skills/`, plus every `CLAUDE.md`/`AGENTS.md`. Markdown elsewhere is never touched
 - **Live index** where the editor supports LSP file watching; open buffers beat disk. Without watching, the index catches up on file open or restart
-- **`.skillignore`** (gitignore syntax, workspace root) excludes paths from everything
+- **`.skillignore`** (gitignore syntax, workspace root) excludes paths from everything — `!` negation re-includes, with git's usual rule that you can't re-include inside an excluded directory (`dir/*` + `!dir/keep/` works; `dir/` + `!dir/keep/` doesn't)
 - Multi-root workspaces: only the first folder is indexed
 
 Cross-workspace renames are a deliberate two-step: rename where the skill lives, then open the other workspace — stale references surface as hints/warnings there. Blind spots: `$` stragglers stay silent, and an old name that doubles as a built-in command reads as the built-in.

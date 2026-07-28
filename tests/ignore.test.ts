@@ -37,3 +37,26 @@ test("ignored files never receive diagnostics", async () => {
   await c.settle()
   expect(c.diagnostics.has(uriFor("ignored/skills/decoy/SKILL.md"))).toBe(false)
 })
+
+test("a ! negation pattern re-includes a subtree of an ignored dir", async () => {
+  // .skillignore pairs `ignored/*` with `!ignored/keep/`: the decoy stays
+  // out while the rescued skill is indexed like any other.
+  await c.open(".claude/draft-negation.md", "Try /")
+  const items = completionItemsOf(
+    await c.completion(".claude/draft-negation.md", { character: 5, line: 0 })
+  )
+  const labels = items.map((i) => i.label)
+  expect(labels).toContain("rescued")
+  expect(labels).not.toContain("decoy")
+})
+
+test("references resolve into a re-included skill", async () => {
+  await c.open(".claude/draft-negation-ref.md", "See /rescued")
+  const res = await c.definition(".claude/draft-negation-ref.md", {
+    character: 6,
+    line: 0,
+  })
+  const locations = asLocations(res)
+  expect(locations).toHaveLength(1)
+  expect(locations[0]?.uri).toBe(uriFor("ignored/keep/skills/rescued/SKILL.md"))
+})
