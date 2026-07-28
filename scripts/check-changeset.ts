@@ -58,7 +58,7 @@ const git = async (...args: string[]) => (await $`git ${args}`.text()).trimEnd()
 const normalizePath = (filePath: string) =>
   filePath.replaceAll("\\", "/").replace(RELATIVE_PATH_PREFIX_PATTERN, "")
 
-const isChangesetPath = (filePath: string): boolean =>
+const isChangesetPath = (filePath: string) =>
   CHANGESET_PATH_PATTERN.test(filePath)
 
 const isReleaseInputPath = (filePath: string) =>
@@ -255,10 +255,7 @@ async function main() {
 
   if (unsupportedReleases.length > 0) {
     fail(
-      [
-        `Changesets in this repo may only release "${PACKAGE_NAME}" or be empty.`,
-        ...unsupportedReleases.map((release) => `- ${release}`),
-      ].join("\n")
+      `Changesets in this repo may only release "${PACKAGE_NAME}" or be empty.\n${bulletList(unsupportedReleases)}`
     )
   }
 

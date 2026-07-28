@@ -29,12 +29,10 @@ const COMMAND_COUNT = 5
 const PARSE_BATCH = 100
 const REFERENCE_BATCH = 100
 
-const PROSE = [
-  "This paragraph pads the file to a realistic size so parsing cost",
-  "reflects real skill documents rather than three-line stubs. Paths like",
-  "/usr/bin and $PATH and https://example.com must never parse as tokens,",
-  "and neither should ~/scripts/setup.sh or the price of $5.",
-]
+const PROSE = `This paragraph pads the file to a realistic size so parsing cost
+reflects real skill documents rather than three-line stubs. Paths like
+/usr/bin and $PATH and https://example.com must never parse as tokens,
+and neither should ~/scripts/setup.sh or the price of $5.`
 
 const ref = (n: number, total: number) =>
   `/skill-${((n % total) + total) % total}`
@@ -49,50 +47,47 @@ function oddityFor(i: number, total: number): string {
   return `See also ${ref(i * 3, total)}.`
 }
 
-function skillDoc(i: number, total: number): string {
-  return [
-    "---",
-    `name: skill-${i}`,
-    `description: Synthetic benchmark skill ${i}`,
-    "---",
-    "",
-    `# skill-${i}`,
-    "",
-    `Run ${ref(i + 1, total)} before this one, then ${ref(i + 2, total)}.`,
-    `The dollar flavor is $skill-${(i + 7) % total}, and /cmd-1 is a command.`,
-    "",
-    ...PROSE,
-    "",
-    "```bash",
-    `# fenced references never count: /skill-${i} --dry-run`,
-    "~~~ still inside the fence",
-    "```",
-    "",
-    oddityFor(i, total),
-    "",
-    ...PROSE,
-    "",
-    `Finish with ${ref(i - 1, total)}.`,
-    "",
-  ].join("\n")
-}
+const skillDoc = (i: number, total: number) => `---
+name: skill-${i}
+description: Synthetic benchmark skill ${i}
+---
 
-const noteDoc = (i: number) =>
-  `# Note ${i}\n\nOut of scope: walked by the traversal, never indexed.\n`
+# skill-${i}
 
-const commandDoc = (k: number) =>
-  `# cmd-${k}\n\nA custom command file; /cmd-${k} references are exempt.\n`
+Run ${ref(i + 1, total)} before this one, then ${ref(i + 2, total)}.
+The dollar flavor is $skill-${(i + 7) % total}, and /cmd-1 is a command.
 
-const rootMemoryDoc = (total: number) =>
-  [
-    "# Agent memory",
-    "",
-    ...Array.from(
-      { length: Math.min(50, total) },
-      (_, i) => `- ${ref(i, total)} handles case ${i}, per /cmd-1.`
-    ),
-    "",
-  ].join("\n")
+${PROSE}
+
+\`\`\`bash
+# fenced references never count: /skill-${i} --dry-run
+~~~ still inside the fence
+\`\`\`
+
+${oddityFor(i, total)}
+
+${PROSE}
+
+Finish with ${ref(i - 1, total)}.
+`
+
+const noteDoc = (i: number) => `# Note ${i}
+
+Out of scope: walked by the traversal, never indexed.
+`
+
+const commandDoc = (k: number) => `# cmd-${k}
+
+A custom command file; /cmd-${k} references are exempt.
+`
+
+const rootMemoryDoc = (total: number) => `# Agent memory
+
+${Array.from(
+  { length: Math.min(50, total) },
+  (_, i) => `- ${ref(i, total)} handles case ${i}, per /cmd-1.`
+).join("\n")}
+`
 
 async function buildCorpus(dir: string, corpus: Corpus): Promise<void> {
   const marker = Bun.file(join(dir, ".complete"))
