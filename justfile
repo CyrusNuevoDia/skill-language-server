@@ -11,9 +11,11 @@ build-server:
     bun build --compile --outfile=dist/skill-language-server src/main.ts
     bun build --target=node --format=cjs --banner='#!/usr/bin/env node' --outfile=dist/main.cjs src/main.ts
 
-# VS Code extension: bundle server + client, package as .vsix
+# VS Code extension: bundle server + client, package as .vsix (version mirrors the root package)
 build-vscode:
     mkdir -p dist ext/vscode/dist
+    jq --arg v "$(jq -r .version package.json)" '.version = $v' ext/vscode/package.json > ext/vscode/package.json.tmp
+    mv ext/vscode/package.json.tmp ext/vscode/package.json
     bun build --target=node --format=cjs --outfile=ext/vscode/dist/server.js src/main.ts
     cd ext/vscode && bun install
     cd ext/vscode && bun build --target=node --format=cjs --external=vscode --outfile=dist/extension.js src/extension.ts

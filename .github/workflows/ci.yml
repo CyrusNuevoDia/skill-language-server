@@ -34,3 +34,5 @@ jobs:
         run: just check
       - name: test
         run: just test
+      - name: package
+        run: just build-vscode

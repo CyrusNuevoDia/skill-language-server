@@ -1,10 +1,26 @@
 {
   "name": "skill-language-server",
   "displayName": "Skill Language Server",
-  "description": "Go-to-definition, find-references, and cross-file rename for agent skill files (SKILL.md)",
-  "version": "0.0.1",
-  "publisher": "cyrusnuevodia",
+  "description": "Go-to-definition, find-references, completion, and cross-file rename for agent skills (SKILL.md)",
+  "version": "0.5.1",
+  "publisher": "cyrusnewday",
   "license": "MIT",
+  "icon": "icon.png",
+  "galleryBanner": {
+    "color": "#4F46E5",
+    "theme": "dark"
+  },
+  "keywords": [
+    "skills",
+    "SKILL.md",
+    "claude",
+    "agents",
+    "markdown"
+  ],
+  "homepage": "https://github.com/CyrusNuevoDia/skill-language-server",
+  "bugs": {
+    "url": "https://github.com/CyrusNuevoDia/skill-language-server/issues"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/CyrusNuevoDia/skill-language-server"
