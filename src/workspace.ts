@@ -66,9 +66,10 @@ export class Workspace {
     this.files.clear()
     this.skills.clear()
     this.ignored = await loadSkillignore(this.root)
+
     for await (const path of walk(this.root)) {
       if (path.endsWith(".md") && this.inScope(path)) {
-        this.indexFile(path, await readFile(path, "utf8"))
+        await this.reindexPath(path)
       }
     }
   }
@@ -93,30 +94,27 @@ export class Workspace {
     try {
       return this.indexFile(path, await readFile(path, "utf8"))
     } catch {
-      this.removeFile(uriOf(path))
+      this.removeFile({ uri: uriOf(path) })
       return null
     }
   }
 
-  removeFile(uri: string): void {
+  removeFile = ({ uri }: { uri: string }): FileEntry | null => {
     const entry = this.files.get(uri)
     if (!entry) {
-      return
+      return null
     }
     this.removeSkill(entry)
     this.files.delete(uri)
+    return entry
   }
 
   /** Drop every indexed file at or under a filesystem path (folder deletes arrive as one event). */
-  removeUnder(path: string): string[] {
-    const removed = [...this.files.values()]
+  removeUnder = (path: string): FileEntry[] =>
+    [...this.files.values()]
       .filter((f) => f.path === path || f.path.startsWith(path + sep))
-      .map((f) => f.uri)
-    for (const uri of removed) {
-      this.removeFile(uri)
-    }
-    return removed
-  }
+      .map(this.removeFile)
+      .filter(Boolean)
 
   indexFile(path: string, text: string): FileEntry {
     const uri = uriOf(path)
@@ -165,23 +163,17 @@ export class Workspace {
     }
   }
 
-  skillOf(name: string): Skill | undefined {
-    return this.skills.get(name)?.[0]
-  }
+  skillOf = (name: string): Skill | undefined => this.skills.get(name)?.[0]
 
   /** The SKILL.md file entry backing a skill. */
-  entryOf(skill: Skill): FileEntry | undefined {
-    return this.files.get(uriOf(skill.skillFilePath))
-  }
+  entryOf = (skill: Skill): FileEntry | undefined =>
+    this.files.get(uriOf(skill.skillFilePath))
 
   /** Location of a skill's definition: the frontmatter `name:` value. */
-  definitionOf(skill: Skill): Location {
-    const entry = this.entryOf(skill)
-    return {
-      range: entry?.frontmatter?.nameRange ?? ZERO_RANGE,
-      uri: uriOf(skill.skillFilePath),
-    }
-  }
+  definitionOf = (skill: Skill): Location => ({
+    range: this.entryOf(skill)?.frontmatter?.nameRange ?? ZERO_RANGE,
+    uri: uriOf(skill.skillFilePath),
+  })
 
   /** Every reference (name-part range) to a skill across scanned files. */
   referencesTo(name: string): Location[] {
@@ -197,11 +189,8 @@ export class Workspace {
   }
 
   /** The reference token at a position, if any (hit-test includes the sigil). */
-  tokenAt(uri: string, pos: Position): Token | undefined {
-    return this.files
-      .get(uri)
-      ?.tokens.find((t) => containsPos(fullRange(t), pos))
-  }
+  tokenAt = (uri: string, pos: Position): Token | undefined =>
+    this.files.get(uri)?.tokens.find((t) => containsPos(fullRange(t), pos))
 
   /** The skill declaration (frontmatter `name:` value) containing this position. */
   declAt(
@@ -382,32 +371,35 @@ async function* walk(
     const path = join(dir, e.name)
     // biome-ignore lint/performance/noAwaitInLoops: the ancestor-chain cycle guard requires sequential depth-first order
     const kind = await kindOf(e, path)
-    if (kind === "dir" && !SKIP_DIRS.has(e.name)) {
+    if (kind === DirKind && !SKIP_DIRS.has(e.name)) {
       yield* walk(path, ancestors)
-    } else if (kind === "file") {
+    } else if (kind === FileKind) {
       yield path
     }
   }
   ancestors.delete(real)
 }
 
+const DirKind = Symbol("DirKind")
+const FileKind = Symbol("FileKind")
+
 /** Entry kind, following symlinks; broken links are neither dir nor file. */
 async function kindOf(
   entry: Dirent,
   path: string
-): Promise<"dir" | "file" | null> {
+): Promise<typeof DirKind | typeof FileKind | null> {
   if (entry.isSymbolicLink()) {
     const [, s] = await attemptAsync(() => stat(path))
     if (s === null) {
       return null
     }
     if (s.isDirectory()) {
-      return "dir"
+      return DirKind
     }
-    return s.isFile() ? "file" : null
+    return s.isFile() ? FileKind : null
   }
   if (entry.isDirectory()) {
-    return "dir"
+    return DirKind
   }
-  return entry.isFile() ? "file" : null
+  return entry.isFile() ? FileKind : null
 }

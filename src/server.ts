@@ -169,12 +169,12 @@ export function startServer(connection: Connection): void {
       // A recursive folder delete arrives as ONE event for the folder itself;
       // evict everything underneath, but open buffers stay authoritative.
       for (const removed of ws.removeUnder(path)) {
-        const doc = documents.get(removed)
-        const removedPath = pathOf(removed)
+        const doc = documents.get(removed.uri)
+        const removedPath = pathOf(removed.uri)
         if (doc && removedPath) {
           ws.indexFile(removedPath, doc.getText())
         } else {
-          publish(removed, [])
+          publish(removed.uri, [])
         }
       }
     } else if (ws.inScope(path) && !(await ws.reindexPath(path))) {
