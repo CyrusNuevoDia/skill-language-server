@@ -8,7 +8,13 @@ import {
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { asLocations, Client, rangeOf, startClient, uriFor } from "./_harness"
+import {
+  asLocations,
+  Client,
+  rangeOf,
+  startClient,
+  uriFor,
+} from "./helpers/harness"
 
 const c = await startClient()
 

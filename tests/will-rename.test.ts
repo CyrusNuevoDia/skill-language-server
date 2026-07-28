@@ -1,7 +1,12 @@
 import { expect, test } from "bun:test"
 import type { WorkspaceEdit } from "vscode-languageserver-protocol"
-import { renameFilesOf, sortByPos, startClient, textEditsOf } from "./_harness"
 import { expectedShippingEdits } from "./corpus"
+import {
+  renameFilesOf,
+  sortByPos,
+  startClient,
+  textEditsOf,
+} from "./helpers/harness"
 
 const c = await startClient()
 

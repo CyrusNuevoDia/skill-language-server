@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
-import { asLocations, posOf, startClient } from "./_harness"
 import { locOf, SHIPPING_DECL } from "./corpus"
+import { asLocations, posOf, startClient } from "./helpers/harness"
 
 const c = await startClient()
 

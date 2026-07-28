@@ -6,7 +6,7 @@ import {
   DidChangeWatchedFilesNotification,
   FileChangeType,
 } from "vscode-languageserver-protocol"
-import { startClient, WORKSPACE } from "./_harness"
+import { startClient, WORKSPACE } from "./helpers/harness"
 
 const root = mkdtempSync(join(tmpdir(), "skill-language-server-reload-"))
 cpSync(WORKSPACE, root, { recursive: true })

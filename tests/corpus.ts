@@ -1,5 +1,5 @@
 import type { Location } from "vscode-languageserver-protocol"
-import { type FlatEdit, rangeOf, uriFor } from "./_harness"
+import { type FlatEdit, rangeOf, uriFor } from "./helpers/harness"
 
 /**
  * Ground truth for the fixture workspace: every reference to `shipping` the

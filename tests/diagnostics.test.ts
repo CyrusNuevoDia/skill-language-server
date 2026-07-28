@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import { DiagnosticSeverity } from "vscode-languageserver-protocol"
-import { contentOf, rangeOf, startClient, uriFor } from "./_harness"
+import { contentOf, rangeOf, startClient, uriFor } from "./helpers/harness"
 
 const c = await startClient()
 

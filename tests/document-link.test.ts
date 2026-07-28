@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { rangeOf, startClient, uriFor } from "./_harness"
+import { rangeOf, startClient, uriFor } from "./helpers/harness"
 
 const c = await startClient()
 

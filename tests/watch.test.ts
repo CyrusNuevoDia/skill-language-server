@@ -3,7 +3,7 @@ import {
   DidChangeWatchedFilesNotification,
   FileChangeType,
 } from "vscode-languageserver-protocol"
-import { asLocations, posOf, startClient, uriFor } from "./_harness"
+import { asLocations, posOf, startClient, uriFor } from "./helpers/harness"
 
 const c = await startClient()
 

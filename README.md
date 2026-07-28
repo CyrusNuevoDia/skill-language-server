@@ -134,7 +134,7 @@ just build   # everything into dist/ — binary, .vsix, Zed wasm (wasm needs rus
 just fmt     # ultracite fix --unsafe
 ```
 
-The test suite is the contract: `tests/_harness.ts` boots the real server over in-memory streams; `tests/corpus.ts` is the ground-truth reference set. Done = `just check` green.
+The test suite is the contract: `tests/helpers/harness.ts` boots the real server over in-memory streams; `tests/corpus.ts` is the ground-truth reference set. Done = `just check` green.
 
 Three layers in `src/`: `parse.ts` (token grammar), `workspace.ts` (index), `server.ts` (LSP wiring). Editor shims in `ext/{vscode,zed,nvim}`.
 

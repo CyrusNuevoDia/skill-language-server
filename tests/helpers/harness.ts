@@ -39,7 +39,7 @@ import {
 } from "vscode-languageserver-protocol/node"
 import { startServer } from "@/server"
 
-export const WORKSPACE = resolve(import.meta.dir, "fixtures", "workspace")
+export const WORKSPACE = resolve(import.meta.dir, "..", "fixtures", "workspace")
 
 export const DEFAULT_CAPABILITIES: ClientCapabilities = {
   textDocument: {

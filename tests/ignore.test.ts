@@ -5,7 +5,7 @@ import {
   posOf,
   startClient,
   uriFor,
-} from "./_harness"
+} from "./helpers/harness"
 
 const c = await startClient()
 

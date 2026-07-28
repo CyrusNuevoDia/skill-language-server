@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { posOf, startClient } from "./_harness"
+import { posOf, startClient } from "./helpers/harness"
 
 type DecodedToken = { character: number; length: number; line: number }
 

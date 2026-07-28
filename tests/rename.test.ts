@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test"
 import type { WorkspaceEdit } from "vscode-languageserver-protocol"
+import { expectedShippingEdits, SHIPPING_DECL } from "./corpus"
 import {
   Client,
   posOf,
@@ -10,8 +11,7 @@ import {
   textEditsOf,
   uriFor,
   WORKSPACE,
-} from "./_harness"
-import { expectedShippingEdits, SHIPPING_DECL } from "./corpus"
+} from "./helpers/harness"
 
 const c = await startClient()
 
