@@ -17,7 +17,7 @@ const RELEASE_INPUT_FILES = new Set([
   "README.md",
   "CHANGELOG.md",
   "justfile",
-  "scripts/check-release-changeset.ts",
+  "scripts/check-changeset.ts",
 ])
 const RELEASE_INPUT_PREFIXES = [
   "src/",
