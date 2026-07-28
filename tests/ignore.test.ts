@@ -34,7 +34,6 @@ test("ignored files get no features even when opened", async () => {
 
 test("ignored files never receive diagnostics", async () => {
   // The decoy contains /shiping, which would warn if it were indexed.
-  await c.diagnosticsFor(".claude/skills/typo-source/SKILL.md")
-  await new Promise((r) => setTimeout(r, 150))
+  await c.settle()
   expect(c.diagnostics.has(uriFor("ignored/skills/decoy/SKILL.md"))).toBe(false)
 })

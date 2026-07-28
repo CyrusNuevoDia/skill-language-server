@@ -44,6 +44,22 @@ test("no completion inside fenced code blocks", async () => {
   expect(completionItemsOf(res)).toEqual([])
 })
 
+test("items carry a textEdit replacing the typed prefix — client word boundaries would mangle `-`/`:` names", async () => {
+  await c.open(".claude/draft-prefix.md", "Use /shipp")
+  const items = completionItemsOf(
+    await c.completion(".claude/draft-prefix.md", { character: 10, line: 0 })
+  )
+  const shipping = items.find((i) => i.label === "shipping")
+  expect(shipping?.filterText).toBe("shipping")
+  expect(shipping?.textEdit).toEqual({
+    newText: "shipping",
+    range: {
+      end: { character: 10, line: 0 },
+      start: { character: 5, line: 0 },
+    },
+  })
+})
+
 test("typing $ offers the same skills", async () => {
   await c.open(".claude/draft-dollar.md", "Use $")
   const items = completionItemsOf(

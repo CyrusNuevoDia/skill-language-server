@@ -1,12 +1,16 @@
 import { regex } from "arkregex"
 import { type } from "arktype"
+import { attempt } from "es-toolkit"
 import type { Range } from "vscode-languageserver"
 import { parse as parseYAML } from "yaml"
 import { rangeIn } from "./utils"
 
-const FrontmatterFields = type({ "description?": "string", "name?": "string" })
+type FrontmatterFields = {
+  description?: string
+  name?: string
+}
 
-export type Frontmatter = typeof FrontmatterFields.infer & {
+export type Frontmatter = FrontmatterFields & {
   /** First line index after the closing `---`. */
   endLine: number
   /** Range of the value of the `name:` field. */
@@ -14,14 +18,19 @@ export type Frontmatter = typeof FrontmatterFields.infer & {
 }
 
 export type Token = {
-  line: number
   name: string
   /** Range of the name part only (sigil excluded). */
   nameRange: Range
   sigil: "/" | "$"
-  /** Column of the sigil. */
-  startChar: number
 }
+
+/** The token's range including its sigil (for hit-tests, links, highlights). */
+export const fullRange = (token: Token): Range =>
+  rangeIn(
+    token.nameRange.start.line,
+    token.nameRange.start.character - 1,
+    token.nameRange.end.character
+  )
 
 export type ParsedDoc = {
   /** Line numbers inside (or delimiting) fenced code blocks. */
@@ -34,11 +43,19 @@ export type ParsedDoc = {
 // repeat (a::b, x--y) but never lead or trail, so "/ship:" in prose keeps
 // its colon.
 export const NAME_PATTERN = "[a-z0-9_]+(?:[-:]+[a-z0-9_]+)*"
-const TOKEN = regex(`[/$](${NAME_PATTERN})`, "g")
-/** A sigil preceded by any of these is a path segment, URI scheme, shell var, etc. */
-export const BAD_PREV = /[A-Za-z0-9_$/:.-]/
-const FENCE = /^ {0,3}(```|~~~)/
+/** A sigil preceded by any of these is a path segment, URI scheme, shell var, home dir, etc. */
+export const BAD_PREV = /[A-Za-z0-9_$/:.~-]/
+const FENCE = /^ {0,3}(`{3,}|~{3,})/
+/** A closing fence: marker only, nothing after but whitespace. */
+const FENCE_CLOSE = /^ {0,3}(`{3,}|~{3,})[ \t]*$/
 const NAME_LINE = regex("^name:\\s*(\\S.*?)\\s*$")
+/** YAML document delimiters must sit at column 0 — an indented `---` is content. */
+const OPEN_DELIM = /^---[ \t]*$/
+const CLOSE_DELIM = /^(?:---|\.\.\.)[ \t]*$/
+
+/** Per CommonMark, only a closer with the same marker char and at least the opening length ends a fence. */
+const closesFence = (line: string, opening: string): boolean =>
+  FENCE_CLOSE.exec(line)?.[1].startsWith(opening) === true
 
 export function parseDoc(text: string): ParsedDoc {
   const lines = text.split("\n")
@@ -46,72 +63,74 @@ export function parseDoc(text: string): ParsedDoc {
 
   const tokens: Token[] = []
   const fenced = new Set<number>()
-  let inFence = false
+  let fence: string | null = null
   const startLine = frontmatter ? frontmatter.endLine : 0
   for (let i = startLine; i < lines.length; i += 1) {
     const line = lines[i]
-    if (FENCE.test(line)) {
-      inFence = !inFence
+    if (fence) {
       fenced.add(i)
+      if (closesFence(line, fence)) {
+        fence = null
+      }
       continue
     }
-    if (inFence) {
+    const { 1: opened } = FENCE.exec(line) ?? []
+    if (opened) {
+      fence = opened
       fenced.add(i)
       continue
     }
 
-    TOKEN.lastIndex = 0
-    for (let m = TOKEN.exec(line); m; m = TOKEN.exec(line)) {
-      const prev = m.index > 0 ? line[m.index - 1] : ""
-      if (prev && BAD_PREV.test(prev)) {
-        continue
-      }
-      if (line[m.index + m[0].length] === "/") {
-        continue // path like /usr/bin
-      }
-      tokens.push({
-        line: i,
-        name: m[1],
-        nameRange: rangeIn(i, m.index + 1, m.index + m[0].length),
-        sigil: line[m.index] as "/" | "$",
-        startChar: m.index,
-      })
-    }
+    scanTokens(line, i, tokens)
   }
   return { fenced, frontmatter, tokens }
 }
 
+function scanTokens(line: string, lineNo: number, tokens: Token[]): void {
+  // Constructed per call: the `g` flag makes a regex stateful (lastIndex), so
+  // a shared instance would leak position state across calls.
+  const token = regex(`([/$])(${NAME_PATTERN})`, "g")
+  for (let m = token.exec(line); m; m = token.exec(line)) {
+    const prev = m.index > 0 ? line[m.index - 1] : ""
+    if (prev && BAD_PREV.test(prev)) {
+      continue
+    }
+    if (line[m.index + m[0].length] === "/") {
+      continue // path like /usr/bin
+    }
+    const { 1: sigil, 2: name } = m
+    tokens.push({
+      name,
+      nameRange: rangeIn(lineNo, m.index + 1, m.index + m[0].length),
+      sigil,
+    })
+  }
+}
+
 function parseFrontmatter(lines: string[]): Frontmatter | null {
-  if (lines[0]?.trim() !== "---") {
+  if (!(lines[0] && OPEN_DELIM.test(lines[0]))) {
     return null
   }
-  let close = -1
-  for (let i = 1; i < lines.length; i += 1) {
-    const t = lines[i].trim()
-    if (t === "---" || t === "...") {
-      close = i
-      break
-    }
-  }
+  const close = lines.findIndex((l, i) => i > 0 && CLOSE_DELIM.test(l))
   if (close === -1) {
     return null
   }
 
-  let data: unknown = {}
-  try {
-    data = parseYAML(lines.slice(1, close).join("\n")) ?? {}
-  } catch {
-    // Malformed YAML: fall through with no fields; diagnostics may cover this later.
-  }
-  const parsed = FrontmatterFields(data)
-  const fields = parsed instanceof type.errors ? {} : parsed
+  // Malformed YAML: fall back to no fields; diagnostics may cover this later.
+  const [, parsed] = attempt(() => parseYAML(lines.slice(1, close).join("\n")))
+  const data: unknown = parsed ?? {}
+  const fields = fieldsOf(data)
 
   let nameRange: Range | undefined
   for (let i = 1; i < close; i += 1) {
     const m = NAME_LINE.exec(lines[i])
     if (m) {
-      const col = lines[i].indexOf(m[1])
-      nameRange = rangeIn(i, col, col + m[1].length)
+      // Anchor to the YAML-parsed value when it appears verbatim, so quotes
+      // and trailing comments stay outside the range; else the raw capture.
+      const value =
+        fields.name && lines[i].includes(fields.name) ? fields.name : m[1]
+      const col = lines[i].indexOf(value)
+      nameRange = rangeIn(i, col, col + value.length)
       break
     }
   }
@@ -121,4 +140,22 @@ function parseFrontmatter(lines: string[]): Frontmatter | null {
     endLine: close + 1,
     nameRange,
   }
+}
+
+const StringValue = type("string")
+
+/** Salvage fields one by one: a wrong-typed field must not erase the others. */
+function fieldsOf(data: unknown): FrontmatterFields {
+  if (typeof data !== "object" || data === null) {
+    return {}
+  }
+  const record = data as Record<string, unknown>
+  const fields: FrontmatterFields = {}
+  if (StringValue.allows(record.name)) {
+    fields.name = record.name
+  }
+  if (StringValue.allows(record.description)) {
+    fields.description = record.description
+  }
+  return fields
 }

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test"
 import { DiagnosticSeverity } from "vscode-languageserver-protocol"
-import { Client, rangeOf, uriFor } from "./harness"
+import { Client, contentOf, rangeOf, uriFor } from "./harness"
 
 let c: Client
 beforeAll(async () => {
@@ -32,11 +32,13 @@ test("near-miss reference gets a did-you-mean warning; other unknown references 
 })
 
 test("builtin command names produce no diagnostics, even as near-misses of real skills", async () => {
-  expect(await c.diagnosticsFor(".claude/builtins.md")).toEqual([])
+  await c.settle()
+  expect(c.diagnostics.has(uriFor(".claude/builtins.md"))).toBe(false)
 })
 
 test("commands defined by .claude/commands or .codex/prompts files produce no diagnostics", async () => {
-  expect(await c.diagnosticsFor(".claude/custom-commands.md")).toEqual([])
+  await c.settle()
+  expect(c.diagnostics.has(uriFor(".claude/custom-commands.md"))).toBe(false)
 })
 
 test("dollar sigils skip the builtin list but never get the unknown-reference hint", async () => {
@@ -87,14 +89,33 @@ test("SKILL.md with no frontmatter name gets a missing-name error", async () => 
   expect(String(diags[0].message)).toContain("noname")
 })
 
-test("clean files get an explicit empty publish", async () => {
-  expect(await c.diagnosticsFor(".claude/skills/billing/SKILL.md")).toEqual([])
+test("clean files never receive a publish, not even an empty one", async () => {
+  await c.settle()
+  expect(c.diagnostics.has(uriFor(".claude/skills/billing/SKILL.md"))).toBe(
+    false
+  )
 })
 
 test("out-of-scope markdown never receives diagnostics", async () => {
-  // Wait for the full workspace scan to land, then check the absence.
-  await c.diagnosticsFor(".claude/skills/typo-source/SKILL.md")
-  await c.diagnosticsFor("docs/skills/deploy/SKILL.md")
-  await new Promise((r) => setTimeout(r, 150))
+  // Settle so the full workspace scan has landed, then check the absence.
+  await c.settle()
   expect(c.diagnostics.has(uriFor("docs/guide.md"))).toBe(false)
+})
+
+test("diagnostics going non-empty to empty get exactly one clearing publish", async () => {
+  const rel = ".claude/skills/shipping/SKILL.md"
+  const uri = c.uriFor(rel)
+  const countEmpties = () =>
+    c.publishLog.filter((p) => p.uri === uri && p.diagnostics.length === 0)
+      .length
+
+  await c.open(rel, contentOf(rel).replace("name: shipping", "name: shippin"))
+  await c.settle()
+  expect(c.diagnostics.get(uri)?.length).toBeGreaterThan(0)
+
+  const before = countEmpties()
+  await c.close(rel)
+  await c.settle()
+  expect(countEmpties() - before).toBe(1)
+  expect(c.diagnostics.get(uri)).toEqual([])
 })

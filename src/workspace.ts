@@ -1,4 +1,5 @@
-import { type Dirent, readdirSync, readFileSync } from "node:fs"
+import type { Dirent } from "node:fs"
+import { readdir, readFile, realpath, stat } from "node:fs/promises"
 import { basename, dirname, join, relative, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 import { type } from "arktype"
@@ -9,10 +10,17 @@ import {
   DiagnosticSeverity,
   type Location,
   type Position,
+  type Range,
 } from "vscode-languageserver"
 import { BUILTIN_COMMANDS } from "./builtins"
-import { type Frontmatter, NAME_PATTERN, parseDoc, type Token } from "./parse"
-import { containsPos, distance, rangeIn, uriOf, ZERO_RANGE } from "./utils"
+import {
+  type Frontmatter,
+  fullRange,
+  NAME_PATTERN,
+  parseDoc,
+  type Token,
+} from "./parse"
+import { containsPos, distance, uriOf, ZERO_RANGE } from "./utils"
 
 /** Full-string variant of the token grammar, plus the length cap for renames. */
 export const SkillName = type(new RegExp(`^${NAME_PATTERN}$`)).atMostLength(64)
@@ -47,21 +55,20 @@ export class Workspace {
   readonly files = new Map<string, FileEntry>()
   /** Keyed by canonical (folder) name; >1 entry means duplicates. */
   readonly skills = new Map<string, Skill[]>()
-  /** Patterns from the workspace-root .skillignore, if present. */
-  private ignored: Ignore | null
+  /** Patterns from the workspace-root .skillignore; loaded by scan(). */
+  private ignored: Ignore | null = null
 
   constructor(rootUri: string) {
     this.root = fileURLToPath(rootUri)
-    this.ignored = loadSkillignore(this.root)
   }
 
-  scan(): void {
+  async scan(): Promise<void> {
     this.files.clear()
     this.skills.clear()
-    this.ignored = loadSkillignore(this.root)
-    for (const path of walk(this.root)) {
+    this.ignored = await loadSkillignore(this.root)
+    for await (const path of walk(this.root)) {
       if (path.endsWith(".md") && this.inScope(path)) {
-        this.indexFile(path, readFileSync(path, "utf8"))
+        this.indexFile(path, await readFile(path, "utf8"))
       }
     }
   }
@@ -82,9 +89,9 @@ export class Workspace {
   }
 
   /** Re-read a file from disk into the index; drops it if unreadable. */
-  reindexPath(path: string): FileEntry | null {
+  async reindexPath(path: string): Promise<FileEntry | null> {
     try {
-      return this.indexFile(path, readFileSync(path, "utf8"))
+      return this.indexFile(path, await readFile(path, "utf8"))
     } catch {
       this.removeFile(uriOf(path))
       return null
@@ -98,6 +105,17 @@ export class Workspace {
     }
     this.removeSkill(entry)
     this.files.delete(uri)
+  }
+
+  /** Drop every indexed file at or under a filesystem path (folder deletes arrive as one event). */
+  removeUnder(path: string): string[] {
+    const removed = [...this.files.values()]
+      .filter((f) => f.path === path || f.path.startsWith(path + sep))
+      .map((f) => f.uri)
+    for (const uri of removed) {
+      this.removeFile(uri)
+    }
+    return removed
   }
 
   indexFile(path: string, text: string): FileEntry {
@@ -182,22 +200,20 @@ export class Workspace {
   tokenAt(uri: string, pos: Position): Token | undefined {
     return this.files
       .get(uri)
-      ?.tokens.find((t) =>
-        containsPos(
-          rangeIn(t.line, t.startChar, t.nameRange.end.character),
-          pos
-        )
-      )
+      ?.tokens.find((t) => containsPos(fullRange(t), pos))
   }
 
-  /** The skill name whose frontmatter `name:` value contains this position. */
-  declAt(uri: string, pos: Position): string | undefined {
+  /** The skill declaration (frontmatter `name:` value) containing this position. */
+  declAt(
+    uri: string,
+    pos: Position
+  ): { name: string; range: Range } | undefined {
     const entry = this.files.get(uri)
     const range = entry?.frontmatter?.nameRange
-    if (!(entry?.skillFolder && range)) {
+    if (!(entry?.skillFolder && range && containsPos(range, pos))) {
       return
     }
-    return containsPos(range, pos) ? entry.skillFolder : undefined
+    return { name: entry.skillFolder, range }
   }
 
   /** Resolve the skill a position points at, via reference token or declaration. */
@@ -207,7 +223,14 @@ export class Workspace {
       return this.skillOf(token.name)
     }
     const decl = this.declAt(uri, pos)
-    return decl ? this.skillOf(decl) : undefined
+    if (!decl) {
+      return
+    }
+    // From a declaration, resolve the twin defined in THIS file — never a
+    // same-named duplicate elsewhere in the workspace.
+    return this.skills
+      .get(decl.name)
+      ?.find((s) => uriOf(s.skillFilePath) === uri)
   }
 
   /** Names defined as custom commands: `.claude/commands/<name>.md` or `.codex/prompts/<name>.md`. */
@@ -226,16 +249,33 @@ export class Workspace {
     return out
   }
 
-  diagnosticsFor(entry: FileEntry): Diagnostic[] {
+  diagnosticsFor(
+    entry: FileEntry,
+    commands = this.commandNames()
+  ): Diagnostic[] {
     return [
-      ...this.referenceDiagnostics(entry),
+      ...this.referenceDiagnostics(entry, commands),
       ...this.declarationDiagnostics(entry),
     ]
   }
 
-  private referenceDiagnostics(entry: FileEntry): Diagnostic[] {
-    const out: Diagnostic[] = []
+  /** Diagnostics for every indexed file, sharing one command-name pass. */
+  diagnosticsByURI(): Map<string, Diagnostic[]> {
     const commands = this.commandNames()
+    return new Map(
+      [...this.files.values()].map((entry) => [
+        entry.uri,
+        this.diagnosticsFor(entry, commands),
+      ])
+    )
+  }
+
+  private referenceDiagnostics(
+    entry: FileEntry,
+    commands: Set<string>
+  ): Diagnostic[] {
+    const out: Diagnostic[] = []
+    const names = [...this.skills.keys()]
 
     for (const token of entry.tokens) {
       if (this.skills.has(token.name)) {
@@ -247,11 +287,8 @@ export class Workspace {
       ) {
         continue // a command, not a skill — never diagnosed
       }
-      const near = minBy(
-        [...this.skills.keys()].filter((k) => distance(token.name, k) <= 2),
-        (k) => distance(token.name, k)
-      )
-      if (near) {
+      const near = minBy(names, (name) => distance(token.name, name))
+      if (near && distance(token.name, near) <= 2) {
         out.push({
           message: `Unknown skill "${token.name}". Did you mean "${near}"?`,
           range: token.nameRange,
@@ -273,68 +310,107 @@ export class Workspace {
   }
 
   private declarationDiagnostics(entry: FileEntry): Diagnostic[] {
-    const out: Diagnostic[] = []
+    if (!entry.skillFolder) {
+      return []
+    }
+    const { name, nameRange } = entry.frontmatter ?? {}
+    if (!nameRange) {
+      return [
+        {
+          message: `SKILL.md is missing a frontmatter "name: ${entry.skillFolder}" field.`,
+          range: ZERO_RANGE,
+          severity: DiagnosticSeverity.Error,
+          source: "skill-language-server",
+        },
+      ]
+    }
 
-    if (entry.skillFolder && !entry.frontmatter?.nameRange) {
+    const out: Diagnostic[] = []
+    if (name !== entry.skillFolder) {
       out.push({
-        message: `SKILL.md is missing a frontmatter "name: ${entry.skillFolder}" field.`,
-        range: ZERO_RANGE,
+        message: `Frontmatter name "${name}" does not match folder name "${entry.skillFolder}".`,
+        range: nameRange,
         severity: DiagnosticSeverity.Error,
         source: "skill-language-server",
       })
     }
-
-    if (entry.skillFolder && entry.frontmatter?.nameRange) {
-      const { name, nameRange } = entry.frontmatter
-      if (name !== entry.skillFolder) {
-        out.push({
-          message: `Frontmatter name "${name}" does not match folder name "${entry.skillFolder}".`,
-          range: nameRange,
-          severity: DiagnosticSeverity.Error,
-          source: "skill-language-server",
-        })
-      }
-      const twins = this.skills.get(entry.skillFolder) ?? []
-      if (twins.length > 1) {
-        const other = twins.find((s) => s.skillFilePath !== entry.path)
-        out.push({
-          message: `Duplicate skill name "${entry.skillFolder}" — also defined at ${relative(
-            this.root,
-            other?.skillFilePath ?? ""
-          )}.`,
-          range: nameRange,
-          severity: DiagnosticSeverity.Error,
-          source: "skill-language-server",
-        })
-      }
+    const twin = (this.skills.get(entry.skillFolder) ?? []).find(
+      (s) => s.skillFilePath !== entry.path
+    )
+    if (twin) {
+      out.push({
+        message: `Duplicate skill name "${entry.skillFolder}" — also defined at ${relative(
+          this.root,
+          twin.skillFilePath
+        )}.`,
+        range: nameRange,
+        severity: DiagnosticSeverity.Error,
+        source: "skill-language-server",
+      })
     }
-
     return out
   }
 }
 
-function loadSkillignore(root: string): Ignore | null {
+async function loadSkillignore(root: string): Promise<Ignore | null> {
   try {
-    return ignore().add(readFileSync(join(root, ".skillignore"), "utf8"))
+    return ignore().add(await readFile(join(root, ".skillignore"), "utf8"))
   } catch {
     return null
   }
 }
 
-function* walk(dir: string): Generator<string> {
+async function* walk(
+  dir: string,
+  ancestors = new Set<string>()
+): AsyncGenerator<string> {
+  let real: string
   let entries: Dirent[]
   try {
-    entries = readdirSync(dir, { withFileTypes: true })
+    // The cycle guard keys on real paths of the directories currently being
+    // walked, so a symlink loop terminates no matter which side it is entered
+    // from — but a dir merely reachable twice (symlink + direct path) is
+    // walked via both routes. Yielded paths stay symlink-side.
+    real = await realpath(dir)
+    if (ancestors.has(real)) {
+      return
+    }
+    entries = await readdir(dir, { withFileTypes: true })
   } catch {
     return
   }
+  ancestors.add(real)
   for (const e of entries) {
-    if (e.isDirectory()) {
-      if (!SKIP_DIRS.has(e.name)) {
-        yield* walk(join(dir, e.name))
-      }
-    } else if (e.isFile()) {
-      yield join(dir, e.name)
+    const path = join(dir, e.name)
+    // biome-ignore lint/performance/noAwaitInLoops: the ancestor-chain cycle guard requires sequential depth-first order
+    const kind = await kindOf(e, path)
+    if (kind === "dir" && !SKIP_DIRS.has(e.name)) {
+      yield* walk(path, ancestors)
+    } else if (kind === "file") {
+      yield path
     }
   }
+  ancestors.delete(real)
+}
+
+/** Entry kind, following symlinks; broken links are neither dir nor file. */
+async function kindOf(
+  entry: Dirent,
+  path: string
+): Promise<"dir" | "file" | null> {
+  if (entry.isSymbolicLink()) {
+    try {
+      const s = await stat(path)
+      if (s.isDirectory()) {
+        return "dir"
+      }
+      return s.isFile() ? "file" : null
+    } catch {
+      return null
+    }
+  }
+  if (entry.isDirectory()) {
+    return "dir"
+  }
+  return entry.isFile() ? "file" : null
 }

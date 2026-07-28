@@ -29,17 +29,6 @@ test("adding a path to .skillignore clears its on-screen diagnostics", async () 
     changes: [{ type: FileChangeType.Changed, uri: c.uriFor(".skillignore") }],
   })
 
-  const uri = c.uriFor(typoRel)
-  const deadline = Date.now() + 3000
-  for (;;) {
-    if (c.diagnostics.get(uri)?.length === 0) {
-      break
-    }
-    if (Date.now() > deadline) {
-      throw new Error("stale diagnostics were never cleared")
-    }
-    // biome-ignore lint/performance/noAwaitInLoops: polling for the clear
-    await new Promise((r) => setTimeout(r, 25))
-  }
-  expect(c.diagnostics.get(uri)).toEqual([])
+  await c.settle()
+  expect(c.diagnostics.get(c.uriFor(typoRel))).toEqual([])
 })

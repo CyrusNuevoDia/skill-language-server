@@ -54,3 +54,22 @@ test("watched-files delete drops a skill; re-create restores it", async () => {
     1
   )
 })
+
+test("a folder delete (one event, no .md suffix) evicts everything under it", async () => {
+  const pos = posOf(".codex/AGENTS.md", "/billing", { offset: 2 })
+
+  await c.conn.sendNotification(DidChangeWatchedFilesNotification.type, {
+    changes: [
+      {
+        type: FileChangeType.Deleted,
+        uri: uriFor(".claude/skills/billing"),
+      },
+    ],
+  })
+  expect(asLocations(await c.definition(".codex/AGENTS.md", pos))).toEqual([])
+
+  await notifyChange(FileChangeType.Created)
+  expect(asLocations(await c.definition(".codex/AGENTS.md", pos))).toHaveLength(
+    1
+  )
+})

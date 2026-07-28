@@ -9,6 +9,7 @@ import {
   sortEdits,
   textEditsOf,
   uriFor,
+  WORKSPACE,
 } from "./harness"
 
 let c: Client
@@ -79,6 +80,66 @@ test("rename triggered from the frontmatter name value produces the same edit", 
   expect(textEditsOf(we)).toEqual(
     sortEdits(expectedShippingEdits("express-shipping"))
   )
+})
+
+test("rename to the current name is a no-op, not a self-RenameFile", async () => {
+  const res = await c.rename(
+    ".claude/CLAUDE.md",
+    posOf(".claude/CLAUDE.md", "/shipping", { offset: 3 }),
+    "shipping"
+  )
+  expect(res).toBeNull()
+})
+
+async function renameTwin(folder: string): Promise<WorkspaceEdit> {
+  const rel = `${folder}/SKILL.md`
+  return (await c.rename(
+    rel,
+    posOf(rel, "name: deploy", { offset: 8 }),
+    "deployz"
+  )) as WorkspaceEdit
+}
+
+test("rename from a duplicate's declaration renames THAT twin's folder", async () => {
+  const docsTwin = await renameTwin("docs/skills/deploy")
+  expect(renameFilesOf(docsTwin)).toEqual([
+    {
+      newUri: uriFor("docs/skills/deployz"),
+      oldUri: uriFor("docs/skills/deploy"),
+    },
+  ])
+  const agentsTwin = await renameTwin(".agents/skills/deploy")
+  expect(renameFilesOf(agentsTwin)).toEqual([
+    {
+      newUri: uriFor(".agents/skills/deployz"),
+      oldUri: uriFor(".agents/skills/deploy"),
+    },
+  ])
+  // Each twin's frontmatter edit lands in its own SKILL.md.
+  expect(
+    textEditsOf(agentsTwin).some(
+      (e) => e.uri === uriFor(".agents/skills/deploy/SKILL.md")
+    )
+  ).toBe(true)
+})
+
+test("a client with neither documentChanges nor resourceOperations gets a plain changes map", async () => {
+  const minimal = await Client.start(WORKSPACE, {
+    textDocument: { rename: { prepareSupport: true } },
+  })
+  try {
+    const we = (await minimal.rename(
+      ".claude/CLAUDE.md",
+      posOf(".claude/CLAUDE.md", "/shipping", { offset: 3 }),
+      "express-shipping"
+    )) as WorkspaceEdit
+    expect(we.documentChanges).toBeUndefined()
+    expect(textEditsOf(we)).toEqual(
+      sortEdits(expectedShippingEdits("express-shipping"))
+    )
+  } finally {
+    minimal.stop()
+  }
 })
 
 test("rename rejects invalid skill names", async () => {

@@ -5,11 +5,13 @@ import { pathToFileURL } from "node:url"
 import { sortBy } from "es-toolkit"
 import { createConnection } from "vscode-languageserver/node"
 import {
+  type ClientCapabilities,
   type CompletionItem,
   type CompletionList,
   CompletionRequest,
   DefinitionRequest,
   type Diagnostic,
+  DidCloseTextDocumentNotification,
   DidOpenTextDocumentNotification,
   DocumentLinkRequest,
   InitializedNotification,
@@ -37,6 +39,31 @@ import {
 import { startServer } from "../src/server"
 
 export const WORKSPACE = resolve(import.meta.dir, "fixtures", "workspace")
+
+export const DEFAULT_CAPABILITIES: ClientCapabilities = {
+  textDocument: {
+    completion: {
+      completionItem: { documentationFormat: ["markdown", "plaintext"] },
+    },
+    documentLink: {},
+    publishDiagnostics: {},
+    rename: { prepareSupport: true },
+    semanticTokens: {
+      formats: ["relative"],
+      requests: { full: true },
+      tokenModifiers: [],
+      tokenTypes: ["function"],
+    },
+  },
+  workspace: {
+    fileOperations: { willRename: true },
+    workspaceEdit: {
+      documentChanges: true,
+      resourceOperations: ["create", "rename", "delete"],
+    },
+    workspaceFolders: true,
+  },
+}
 
 export function uriFor(rel: string): string {
   return pathToFileURL(resolve(WORKSPACE, rel)).toString()
@@ -83,6 +110,8 @@ export function rangeOf(
 
 export class Client {
   readonly diagnostics = new Map<string, Diagnostic[]>()
+  /** Every publishDiagnostics notification received, in arrival order. */
+  readonly publishLog: { uri: string; diagnostics: Diagnostic[] }[] = []
   readonly conn: ProtocolConnection
   readonly root: string
 
@@ -96,7 +125,10 @@ export class Client {
     return pathToFileURL(resolve(this.root, rel)).toString()
   }
 
-  static async start(root: string = WORKSPACE): Promise<Client> {
+  static async start(
+    root: string = WORKSPACE,
+    capabilities: ClientCapabilities = DEFAULT_CAPABILITIES
+  ): Promise<Client> {
     const clientToServer = new PassThrough()
     const serverToClient = new PassThrough()
 
@@ -109,35 +141,13 @@ export class Client {
     const client = new Client(conn, root)
     conn.onNotification(PublishDiagnosticsNotification.type, (p) => {
       client.diagnostics.set(p.uri, p.diagnostics)
+      client.publishLog.push({ diagnostics: p.diagnostics, uri: p.uri })
     })
     conn.listen()
 
     const rootUri = pathToFileURL(root).toString()
     await conn.sendRequest(InitializeRequest.type, {
-      capabilities: {
-        textDocument: {
-          completion: {
-            completionItem: { documentationFormat: ["markdown", "plaintext"] },
-          },
-          documentLink: {},
-          publishDiagnostics: {},
-          rename: { prepareSupport: true },
-          semanticTokens: {
-            formats: ["relative"],
-            requests: { full: true },
-            tokenModifiers: [],
-            tokenTypes: ["function"],
-          },
-        },
-        workspace: {
-          fileOperations: { willRename: true },
-          workspaceEdit: {
-            documentChanges: true,
-            resourceOperations: ["create", "rename", "delete"],
-          },
-          workspaceFolders: true,
-        },
-      },
+      capabilities,
       processId: null,
       rootUri,
       workspaceFolders: [{ name: "fixture", uri: rootUri }],
@@ -158,6 +168,12 @@ export class Client {
         uri: this.uriFor(rel),
         version: 1,
       },
+    })
+  }
+
+  close(rel: string): Promise<void> {
+    return this.conn.sendNotification(DidCloseTextDocumentNotification.type, {
+      textDocument: { uri: this.uriFor(rel) },
     })
   }
 
@@ -213,6 +229,19 @@ export class Client {
     return this.conn.sendRequest(CompletionRequest.type, {
       position,
       textDocument: { uri: this.uriFor(rel) },
+    })
+  }
+
+  /**
+   * Round-trip a cheap request. The server serializes index mutations through
+   * one promise chain and request handlers await its tail, so once the
+   * response arrives every publish triggered by earlier notifications has
+   * landed in `diagnostics`.
+   */
+  async settle(): Promise<void> {
+    await this.conn.sendRequest(DefinitionRequest.type, {
+      position: { character: 0, line: 0 },
+      textDocument: { uri: pathToFileURL(this.root).toString() },
     })
   }
 

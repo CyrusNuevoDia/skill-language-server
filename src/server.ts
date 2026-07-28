@@ -1,16 +1,16 @@
 import { basename, dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { type } from "arktype"
-import { groupBy } from "es-toolkit"
+import { groupBy, mapValues, partition } from "es-toolkit"
 import {
-  type CompletionItem,
   CompletionItemKind,
   type Connection,
+  type Diagnostic,
   DidChangeWatchedFilesNotification,
   type DocumentLink,
-  ErrorCodes,
   FileChangeType,
   type InitializeParams,
+  type Location,
   LSPErrorCodes,
   ResourceOperationKind,
   ResponseError,
@@ -21,8 +21,8 @@ import {
   type WorkspaceEdit,
 } from "vscode-languageserver"
 import { TextDocument } from "vscode-languageserver-textdocument"
-import { BAD_PREV } from "./parse"
-import { pathOf, uriOf } from "./utils"
+import { BAD_PREV, fullRange } from "./parse"
+import { pathOf, rangeIn, uriOf } from "./utils"
 import { type Skill, SkillName, Workspace } from "./workspace"
 
 const TYPED_PREFIX = /^[a-z0-9_:-]*$/
@@ -33,9 +33,34 @@ export function startServer(connection: Connection): void {
   let supportsRenameFile = false
   let supportsWatchedFiles = false
 
+  // vscode-jsonrpc dispatches the next message without awaiting an async
+  // notification handler, so every index mutation is serialized through this
+  // one promise chain and every request handler awaits its tail — a request
+  // can never observe a half-applied scan/reindex, and a request round-trip
+  // (the test harness's settle()) still proves earlier publishes landed.
+  let pending: Promise<void> = Promise.resolve()
+  function enqueue(task: () => Promise<void> | void): void {
+    pending = pending
+      .then(task)
+      .catch((err) => connection.console.error(`indexing failed: ${err}`))
+  }
+
+  // Neovim materializes a phantom buffer for every URI that ever receives a
+  // publish, so empty arrays go out only to clear a previous non-empty set.
+  const published = new Set<string>()
+  function publish(uri: string, diagnostics: Diagnostic[]): void {
+    if (diagnostics.length > 0) {
+      published.add(uri)
+      connection.sendDiagnostics({ diagnostics, uri })
+    } else if (published.delete(uri)) {
+      connection.sendDiagnostics({ diagnostics: [], uri })
+    }
+  }
+
   connection.onInitialize((params: InitializeParams) => {
     const rootUri = params.workspaceFolders?.[0]?.uri ?? params.rootUri
-    if (rootUri) {
+    // Non-file roots (virtual filesystems) get the same degraded mode as no root.
+    if (rootUri && pathOf(rootUri)) {
       ws = new Workspace(rootUri)
     }
 
@@ -75,7 +100,8 @@ export function startServer(connection: Connection): void {
   })
 
   connection.onInitialized(() => {
-    if (!ws) {
+    const w = ws
+    if (!w) {
       return
     }
     if (supportsWatchedFiles) {
@@ -84,28 +110,39 @@ export function startServer(connection: Connection): void {
           watchers: [
             { globPattern: "**/*.md" },
             { globPattern: "**/.skillignore" },
+            // Folder deletes arrive as one event for the folder itself,
+            // which **/*.md never matches.
+            { globPattern: "**/skills/*" },
           ],
         })
         .catch(() => {
           // Client declined; didOpen-based reindexing still works.
         })
     }
-    ws.scan()
-    publishAll()
+    enqueue(async () => {
+      await w.scan()
+      publishAll()
+    })
   })
 
   connection.onDidChangeWatchedFiles(({ changes }) => {
     if (!ws) {
       return
     }
-    for (const change of changes) {
-      applyWatchedChange(change.type, change.uri)
-    }
-    if (changes.some((c) => isSkillignore(c.uri))) {
-      rescanPreservingOpenBuffers()
-    }
-    // Duplicate/mismatch diagnostics depend on global state; republish all.
-    publishAll()
+    const [ignoreChanges, fileChanges] = partition(changes, (c) =>
+      isSkillignore(c.uri)
+    )
+    enqueue(async () => {
+      for (const change of fileChanges) {
+        // biome-ignore lint/performance/noAwaitInLoops: changes must apply in arrival order
+        await applyWatchedChange(change.type, change.uri)
+      }
+      if (ignoreChanges.length > 0) {
+        await rescanPreservingOpenBuffers()
+      }
+      // Duplicate/mismatch diagnostics depend on global state; republish all.
+      publishAll()
+    })
   })
 
   function isSkillignore(uri: string): boolean {
@@ -113,8 +150,11 @@ export function startServer(connection: Connection): void {
     return path !== null && basename(path) === ".skillignore"
   }
 
-  function applyWatchedChange(change: FileChangeType, uri: string): void {
-    if (!ws || isSkillignore(uri)) {
+  async function applyWatchedChange(
+    change: FileChangeType,
+    uri: string
+  ): Promise<void> {
+    if (!ws) {
       return
     }
     // An open buffer is authoritative over disk until the editor closes it.
@@ -122,23 +162,34 @@ export function startServer(connection: Connection): void {
       return
     }
     const path = pathOf(uri)
-    if (!(path && ws.inScope(path))) {
+    if (!path) {
       return
     }
     if (change === FileChangeType.Deleted) {
-      ws.removeFile(uri)
-      connection.sendDiagnostics({ diagnostics: [], uri })
-    } else {
-      ws.reindexPath(path)
+      // A recursive folder delete arrives as ONE event for the folder itself;
+      // evict everything underneath, but open buffers stay authoritative.
+      for (const removed of ws.removeUnder(path)) {
+        const doc = documents.get(removed)
+        const removedPath = pathOf(removed)
+        if (doc && removedPath) {
+          ws.indexFile(removedPath, doc.getText())
+        } else {
+          publish(removed, [])
+        }
+      }
+    } else if (ws.inScope(path) && !(await ws.reindexPath(path))) {
+      // Unreadable now (replaced by a directory, permissions): clear its
+      // published diagnostics along with the index entry.
+      publish(uri, [])
     }
   }
 
-  function rescanPreservingOpenBuffers(): void {
+  async function rescanPreservingOpenBuffers(): Promise<void> {
     if (!ws) {
       return
     }
     const before = new Set(ws.files.keys())
-    ws.scan()
+    await ws.scan()
     // scan() reads disk; restore index entries for dirty open buffers.
     for (const doc of documents.all()) {
       const path = pathOf(doc.uri)
@@ -150,7 +201,7 @@ export function startServer(connection: Connection): void {
     // screen unless we explicitly clear them.
     for (const uri of before) {
       if (!ws.files.has(uri)) {
-        connection.sendDiagnostics({ diagnostics: [], uri })
+        publish(uri, [])
       }
     }
   }
@@ -159,36 +210,57 @@ export function startServer(connection: Connection): void {
     if (!ws) {
       return
     }
-    for (const entry of ws.files.values()) {
-      connection.sendDiagnostics({
-        diagnostics: ws.diagnosticsFor(entry),
-        uri: entry.uri,
-      })
+    for (const [uri, diagnostics] of ws.diagnosticsByURI()) {
+      publish(uri, diagnostics)
     }
   }
 
   documents.onDidChangeContent(({ document }) => {
-    if (!ws) {
+    const w = ws
+    if (!w) {
       return
     }
-    const path = pathOf(document.uri)
-    if (!(path && ws.inScope(path))) {
-      return
-    }
-    const entry = ws.indexFile(path, document.getText())
-    connection.sendDiagnostics({
-      diagnostics: ws.diagnosticsFor(entry),
-      uri: entry.uri,
+    enqueue(() => {
+      const path = pathOf(document.uri)
+      if (!(path && w.inScope(path))) {
+        return
+      }
+      const entry = w.indexFile(path, document.getText())
+      publish(entry.uri, w.diagnosticsFor(entry))
     })
   })
 
-  connection.onDefinition(({ textDocument, position }) => {
-    const token = ws?.tokenAt(textDocument.uri, position)
-    const skill = token && ws?.skillOf(token.name)
-    return skill ? ws?.definitionOf(skill) : null
+  documents.onDidClose(({ document }) => {
+    const w = ws
+    if (!w) {
+      return
+    }
+    enqueue(async () => {
+      const path = pathOf(document.uri)
+      if (!(path && w.inScope(path))) {
+        return
+      }
+      // Disk becomes authoritative again: discard whatever the closed buffer
+      // held (an unsaved close leaves no watcher event to re-sync from).
+      if (!(await w.reindexPath(path))) {
+        publish(document.uri, [])
+      }
+      publishAll()
+    })
   })
 
-  connection.languages.semanticTokens.on(({ textDocument }) => {
+  connection.onDefinition(async ({ textDocument, position }) => {
+    await pending
+    if (!ws) {
+      return null
+    }
+    const token = ws.tokenAt(textDocument.uri, position)
+    const skill = token && ws.skillOf(token.name)
+    return skill ? ws.definitionOf(skill) : null
+  })
+
+  connection.languages.semanticTokens.on(async ({ textDocument }) => {
+    await pending
     if (!ws) {
       return { data: [] }
     }
@@ -199,10 +271,11 @@ export function startServer(connection: Connection): void {
     const builder = new SemanticTokensBuilder()
     for (const token of entry.tokens) {
       if (ws.skillOf(token.name)) {
+        const { start, end } = fullRange(token)
         builder.push(
-          token.line,
-          token.startChar,
-          token.nameRange.end.character - token.startChar,
+          start.line,
+          start.character,
+          end.character - start.character,
           0,
           0
         )
@@ -211,7 +284,8 @@ export function startServer(connection: Connection): void {
     return builder.build()
   })
 
-  connection.onDocumentLinks(({ textDocument }) => {
+  connection.onDocumentLinks(async ({ textDocument }) => {
+    await pending
     if (!ws) {
       return []
     }
@@ -224,10 +298,7 @@ export function startServer(connection: Connection): void {
       const skill = ws.skillOf(token.name)
       if (skill) {
         links.push({
-          range: {
-            end: token.nameRange.end,
-            start: { character: token.startChar, line: token.line },
-          },
+          range: fullRange(token),
           target: uriOf(skill.skillFilePath),
         })
       }
@@ -235,7 +306,8 @@ export function startServer(connection: Connection): void {
     return links
   })
 
-  connection.onReferences(({ textDocument, position, context }) => {
+  connection.onReferences(async ({ textDocument, position, context }) => {
+    await pending
     if (!ws) {
       return null
     }
@@ -244,10 +316,19 @@ export function startServer(connection: Connection): void {
       return null
     }
     const refs = ws.referencesTo(skill.name)
-    return context.includeDeclaration ? [...refs, ws.definitionOf(skill)] : refs
+    // Only include a declaration that actually exists — no phantom 0:0 entry
+    // for a SKILL.md missing its name: field.
+    if (
+      context.includeDeclaration &&
+      ws.entryOf(skill)?.frontmatter?.nameRange
+    ) {
+      refs.push(ws.definitionOf(skill))
+    }
+    return refs
   })
 
-  connection.onPrepareRename(({ textDocument, position }) => {
+  connection.onPrepareRename(async ({ textDocument, position }) => {
+    await pending
     if (!ws) {
       return null
     }
@@ -256,17 +337,11 @@ export function startServer(connection: Connection): void {
       return { placeholder: token.name, range: token.nameRange }
     }
     const decl = ws.declAt(textDocument.uri, position)
-    if (!decl) {
-      return null
-    }
-    const entry = ws.files.get(textDocument.uri)
-    if (entry?.frontmatter?.nameRange) {
-      return { placeholder: decl, range: entry.frontmatter.nameRange }
-    }
-    return null
+    return decl ? { placeholder: decl.name, range: decl.range } : null
   })
 
-  connection.onRenameRequest(({ textDocument, position, newName }) => {
+  connection.onRenameRequest(async ({ textDocument, position, newName }) => {
+    await pending
     if (!ws) {
       return null
     }
@@ -277,26 +352,35 @@ export function startServer(connection: Connection): void {
 
     const validated = SkillName(newName)
     if (validated instanceof type.errors) {
+      // The params are well-formed JSON-RPC; the VALUE fails domain rules.
       throw new ResponseError(
-        ErrorCodes.InvalidParams,
+        LSPErrorCodes.RequestFailed,
         `Invalid skill name "${newName}": ${validated.summary}`
       )
     }
-    if (newName !== skill.name && ws.skills.has(newName)) {
+    if (newName === skill.name) {
+      return null // no-op; a self-RenameFile would fail client-side
+    }
+    if (ws.skills.has(newName)) {
       throw new ResponseError(
         LSPErrorCodes.RequestFailed,
         `A skill named "${newName}" already exists.`
       )
     }
 
-    const edits = renameTextEdits(ws, skill, newName)
     if (!supportsRenameFile) {
-      // Degraded client: text edits only; the folder must be renamed manually.
-      return { documentChanges: edits } satisfies WorkspaceEdit
+      // A client declaring neither documentChanges nor resourceOperations
+      // only supports the plain changes map; the folder is renamed manually.
+      return {
+        changes: mapValues(
+          groupBy(renameLocations(ws, skill), (loc) => loc.uri),
+          (locs) => locs.map((loc) => ({ newText: newName, range: loc.range }))
+        ),
+      } satisfies WorkspaceEdit
     }
     return {
       documentChanges: [
-        ...edits,
+        ...renameTextEdits(ws, skill, newName),
         {
           kind: "rename" as const,
           newUri: uriOf(join(dirname(skill.folderPath), newName)),
@@ -306,7 +390,8 @@ export function startServer(connection: Connection): void {
     } satisfies WorkspaceEdit
   })
 
-  connection.workspace.onWillRenameFiles(({ files }) => {
+  connection.workspace.onWillRenameFiles(async ({ files }) => {
+    await pending
     if (!ws) {
       return null
     }
@@ -328,7 +413,8 @@ export function startServer(connection: Connection): void {
     return edits.length > 0 ? { documentChanges: edits } : null
   })
 
-  connection.onCompletion(({ textDocument, position }) => {
+  connection.onCompletion(async ({ textDocument, position }) => {
+    await pending
     if (!ws) {
       return null
     }
@@ -359,31 +445,31 @@ export function startServer(connection: Connection): void {
       return null
     }
 
-    const items: CompletionItem[] = []
-    for (const [name, entries] of ws.skills) {
-      const entry = ws.entryOf(entries[0])
-      items.push({
-        documentation: {
-          kind: "markdown",
-          value: entry?.frontmatter?.description ?? "",
-        },
+    // Explicit textEdit: `-` and `:` are word delimiters in markdown, so
+    // client-side word replacement would mangle multi-segment names
+    // (accepting "session-report" over the typed "session-rep" must not
+    // yield "session-session-report").
+    const editRange = rangeIn(position.line, sigilAt + 1, position.character)
+    return [...ws.skills].map(([name, entries]) => {
+      const description = ws?.entryOf(entries[0])?.frontmatter?.description
+      return {
+        ...(description && {
+          documentation: { kind: "markdown" as const, value: description },
+        }),
+        filterText: name,
         kind: CompletionItemKind.Reference,
         label: name,
-      })
-    }
-    return items
+        textEdit: { newText: name, range: editRange },
+      }
+    })
   })
 
   documents.listen(connection)
   connection.listen()
 }
 
-/** All text edits for renaming a skill: every reference plus the frontmatter name. */
-function renameTextEdits(
-  ws: Workspace,
-  skill: Skill,
-  newName: string
-): TextDocumentEdit[] {
+/** Every range to rewrite when renaming a skill: references plus the frontmatter name. */
+function renameLocations(ws: Workspace, skill: Skill): Location[] {
   const targets = ws.referencesTo(skill.name)
   // Only edit the frontmatter when a name: value actually exists — the
   // missing-name case must not fall back to injecting text at 0:0.
@@ -391,9 +477,17 @@ function renameTextEdits(
   if (entry?.frontmatter?.nameRange) {
     targets.push({ range: entry.frontmatter.nameRange, uri: entry.uri })
   }
-  const byUri = groupBy(targets, (loc) => loc.uri)
-  return Object.entries(byUri).map(([uri, locs]) => ({
-    edits: locs.map((loc) => ({ newText: newName, range: loc.range })),
-    textDocument: { uri, version: null },
-  }))
+  return targets
 }
+
+const renameTextEdits = (
+  ws: Workspace,
+  skill: Skill,
+  newName: string
+): TextDocumentEdit[] =>
+  Object.entries(groupBy(renameLocations(ws, skill), (loc) => loc.uri)).map(
+    ([uri, locs]) => ({
+      edits: locs.map((loc) => ({ newText: newName, range: loc.range })),
+      textDocument: { uri, version: null },
+    })
+  )
