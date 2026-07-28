@@ -1,27 +1,43 @@
-import { spawnSync } from "node:child_process"
-import { readFile } from "node:fs/promises"
 import { regex } from "arkregex"
 import { type } from "arktype"
+import { $ } from "bun"
+import { uniq } from "es-toolkit"
 
-const packageName = "skill-language-server"
-const relativePathPrefixPattern = /^\.\//
-const changesetReleaseLinePattern = regex(
+const PACKAGE_NAME = "skill-language-server"
+const GENERATED_VERSION_COMMIT_PREFIX = `chore(release): bump ${PACKAGE_NAME} version`
+const RELATIVE_PATH_PREFIX_PATTERN = /^\.\//
+const CHANGESET_PATH_PATTERN = regex("^\\.changeset/[^/]+\\.md$")
+const CHANGESET_RELEASE_LINE_PATTERN = regex(
   '^"([^"]+)":\\s*([A-Za-z0-9_-]+)\\s*$'
 )
 
+const RELEASE_INPUT_FILES = new Set([
+  "package.json",
+  "bun.lock",
+  "README.md",
+  "CHANGELOG.md",
+  "justfile",
+  "scripts/check-release-changeset.ts",
+])
+const RELEASE_INPUT_PREFIXES = [
+  "src/",
+  "ext/",
+  ".changeset/",
+  ".github/workflows/",
+]
+
 const ReleaseType = type("'patch' | 'minor' | 'major'")
-type ReleaseType = typeof ReleaseType.infer
 const ChangeStatus = type("'A' | 'C' | 'M' | 'R' | 'D'")
 type ChangeStatus = typeof ChangeStatus.infer
 
 type ChangedFile = {
   status: ChangeStatus
-  paths: string[]
+  paths: [string, ...string[]]
 }
 
 type ReleaseEntry = {
   packageName: string
-  releaseType: ReleaseType
+  releaseType: typeof ReleaseType.infer
 }
 
 type ParsedChangeset = {
@@ -30,330 +46,183 @@ type ParsedChangeset = {
   releases: ReleaseEntry[]
 }
 
+// Must stay a function declaration: tsc's never-return control-flow analysis
+// doesn't terminate branches after calls to const-arrow never functions.
 function fail(message: string): never {
   console.error(message)
   process.exit(1)
 }
 
-function runGit(args: string[]): string {
-  const result = spawnSync("git", args, { encoding: "utf8" })
+const git = async (...args: string[]) => (await $`git ${args}`.text()).trimEnd()
 
-  if (result.status !== 0) {
-    const command = ["git", ...args].join(" ")
-    const stderr = (result.stderr ?? "").trim()
-    const detail = stderr.length > 0 ? `\n${stderr}` : ""
+const normalizePath = (filePath: string) =>
+  filePath.replaceAll("\\", "/").replace(RELATIVE_PATH_PREFIX_PATTERN, "")
 
-    fail(`Git command failed: ${command}${detail}`)
+const isChangesetPath = (filePath: string): boolean =>
+  CHANGESET_PATH_PATTERN.test(filePath)
+
+const isReleaseInputPath = (filePath: string) =>
+  RELEASE_INPUT_FILES.has(filePath) ||
+  RELEASE_INPUT_PREFIXES.some((prefix) => filePath.startsWith(prefix))
+
+const currentPath = ({ status, paths }: ChangedFile) =>
+  status === "D" ? paths[0] : (paths.at(-1) ?? paths[0])
+
+function parseNameStatusLine(line: string): ChangedFile {
+  const [rawStatus, ...rawPaths] = line.split("\t")
+  const status = rawStatus?.[0]
+
+  if (!ChangeStatus.allows(status)) {
+    fail(`Unable to parse git diff status line: ${line}`)
   }
 
-  return result.stdout.trimEnd()
-}
+  const [firstPath, ...restPaths] = rawPaths
+    .map(normalizePath)
+    .filter((filePath) => filePath.length > 0)
 
-function tryRunGit(args: string[]): string | undefined {
-  const result = spawnSync("git", args, { encoding: "utf8" })
-
-  if (result.status !== 0) {
-    return
+  if (firstPath === undefined) {
+    fail(`Git diff status line did not include a path: ${line}`)
   }
 
-  return result.stdout.trimEnd()
+  return { paths: [firstPath, ...restPaths], status }
 }
 
-function normalizePath(filePath: string): string {
-  return filePath.replaceAll("\\", "/").replace(relativePathPrefixPattern, "")
-}
+const parseNameStatus = (diffOutput: string) =>
+  diffOutput
+    .split("\n")
+    .filter((line) => line.trim() !== "")
+    .map(parseNameStatusLine)
 
-function parseNameStatus(diffOutput: string): ChangedFile[] {
-  const changes: ChangedFile[] = []
+const changedReleaseInputPaths = (changes: ChangedFile[]) =>
+  uniq(
+    changes
+      .flatMap((change) => change.paths)
+      .filter(
+        (filePath) => isReleaseInputPath(filePath) && !isChangesetPath(filePath)
+      )
+  ).toSorted()
 
-  for (const line of diffOutput.split("\n")) {
-    if (line.trim() === "") {
-      continue
-    }
+const changedChangesetFiles = (changes: ChangedFile[]) =>
+  changes.filter((change) => change.paths.some(isChangesetPath))
 
-    const [rawStatus, ...rawPaths] = line.split("\t")
-    const status = rawStatus?.[0]
+const parseableChangesetPaths = (changesets: ChangedFile[]) =>
+  uniq(
+    changesets
+      .filter((changeset) => changeset.status !== "D")
+      .map(currentPath)
+      .filter(isChangesetPath)
+  ).toSorted()
 
-    if (!ChangeStatus.allows(status)) {
-      fail(`Unable to parse git diff status line: ${line}`)
-    }
+const untrackedChangesetChanges = async () =>
+  (await git("ls-files", "--others", "--exclude-standard", ".changeset/*.md"))
+    .split("\n")
+    .map(normalizePath)
+    .filter(isChangesetPath)
+    .map((filePath): ChangedFile => ({ paths: [filePath], status: "A" }))
 
-    const paths = rawPaths
-      .map(normalizePath)
-      .filter((filePath) => filePath.length > 0)
+const formatChangedFile = (change: ChangedFile) =>
+  change.paths.length > 1
+    ? `${change.status} ${change.paths[0]} -> ${currentPath(change)}`
+    : `${change.status} ${change.paths[0]}`
 
-    if (paths.length === 0) {
-      fail(`Git diff status line did not include a path: ${line}`)
-    }
+const bulletList = (items: string[]) =>
+  items.length === 0 ? "- none" : items.map((item) => `- ${item}`).join("\n")
 
-    changes.push({ paths, status })
-  }
-
-  return changes
-}
-
-function isChangesetPath(filePath: string): boolean {
-  if (!(filePath.startsWith(".changeset/") && filePath.endsWith(".md"))) {
-    return false
-  }
-
-  return !filePath.slice(".changeset/".length).includes("/")
-}
-
-function isReleaseInputPath(filePath: string): boolean {
-  return (
-    filePath === "package.json" ||
-    filePath === "bun.lock" ||
-    filePath === "README.md" ||
-    filePath === "CHANGELOG.md" ||
-    filePath === "justfile" ||
-    filePath.startsWith("src/") ||
-    filePath.startsWith("ext/") ||
-    filePath.startsWith(".changeset/") ||
-    filePath === "scripts/check-release-changeset.ts" ||
-    filePath.startsWith(".github/workflows/")
+function printDiagnostics(releasePaths: string[], changesets: ChangedFile[]) {
+  console.log(`Changed release input files:\n${bulletList(releasePaths)}`)
+  console.log(
+    `Changed changeset files:\n${bulletList(changesets.map(formatChangedFile))}`
   )
 }
 
-function currentPath(change: ChangedFile): string {
-  const pathIndex = change.status === "D" ? 0 : change.paths.length - 1
-  const filePath = change.paths[pathIndex]
+function parseReleaseLine(line: string, filePath: string): ReleaseEntry {
+  const releaseLine = CHANGESET_RELEASE_LINE_PATTERN.exec(line)
 
-  if (filePath === undefined) {
+  if (releaseLine === null) {
+    fail(`${filePath}: malformed frontmatter line: ${line}`)
+  }
+
+  const { 1: packageName, 2: releaseType } = releaseLine
+
+  if (!ReleaseType.allows(releaseType)) {
     fail(
-      `Git diff entry did not include a usable path for status ${change.status}.`
+      `${filePath}: unsupported release type "${releaseType}" for "${packageName}".`
     )
   }
 
-  return filePath
-}
-
-function changedReleaseInputPaths(changes: ChangedFile[]): string[] {
-  const paths = new Set<string>()
-
-  for (const change of changes) {
-    for (const filePath of change.paths) {
-      if (isReleaseInputPath(filePath) && !isChangesetPath(filePath)) {
-        paths.add(filePath)
-      }
-    }
-  }
-
-  return [...paths].sort()
-}
-
-function changedChangesetFiles(changes: ChangedFile[]): ChangedFile[] {
-  return changes.filter((change) => change.paths.some(isChangesetPath))
-}
-
-function parseableChangesetPaths(changesets: ChangedFile[]): string[] {
-  const paths = new Set<string>()
-
-  for (const changeset of changesets) {
-    if (changeset.status === "D") {
-      continue
-    }
-
-    const filePath = currentPath(changeset)
-
-    if (isChangesetPath(filePath)) {
-      paths.add(filePath)
-    }
-  }
-
-  return [...paths].sort()
-}
-
-function untrackedChangesetChanges(): ChangedFile[] {
-  const output = runGit([
-    "ls-files",
-    "--others",
-    "--exclude-standard",
-    ".changeset/*.md",
-  ])
-
-  return output
-    .split("\n")
-    .map((filePath) => normalizePath(filePath))
-    .filter(isChangesetPath)
-    .map((filePath) => ({ paths: [filePath], status: "A" }))
-}
-
-function formatChangedFile(change: ChangedFile): string {
-  if (change.paths.length === 1) {
-    const [filePath] = change.paths
-
-    if (filePath === undefined) {
-      fail(
-        `Git diff entry did not include a usable path for status ${change.status}.`
-      )
-    }
-
-    return `${change.status} ${filePath}`
-  }
-
-  const [firstPath] = change.paths
-  const lastPath = change.paths.at(-1)
-
-  if (firstPath === undefined || lastPath === undefined) {
-    fail(
-      `Git diff entry did not include usable rename paths for status ${change.status}.`
-    )
-  }
-
-  return `${change.status} ${firstPath} -> ${lastPath}`
-}
-
-function printDiagnostics(
-  releasePaths: string[],
-  changesets: ChangedFile[]
-): void {
-  console.log("Changed release input files:")
-
-  if (releasePaths.length === 0) {
-    console.log("- none")
-  } else {
-    for (const filePath of releasePaths) {
-      console.log(`- ${filePath}`)
-    }
-  }
-
-  console.log("Changed changeset files:")
-
-  if (changesets.length === 0) {
-    console.log("- none")
-  } else {
-    for (const changeset of changesets) {
-      console.log(`- ${formatChangedFile(changeset)}`)
-    }
-  }
+  return { packageName, releaseType }
 }
 
 function parseChangeset(content: string, filePath: string): ParsedChangeset {
   const lines = content.replaceAll("\r\n", "\n").split("\n")
-  const fenceIndices: number[] = []
 
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index]
-
-    if (line?.trim() === "---") {
-      fenceIndices.push(index)
-    }
-
-    if (fenceIndices.length === 2) {
-      break
-    }
-  }
-
-  const [firstFence, secondFence] = fenceIndices
-
-  if (firstFence === undefined || secondFence === undefined) {
-    fail(`${filePath}: missing frontmatter fences.`)
-  }
-
-  if (firstFence !== 0) {
+  if (lines[0]?.trim() !== "---") {
     fail(`${filePath}: frontmatter must start with a --- fence.`)
   }
 
-  const frontmatter = lines.slice(firstFence + 1, secondFence).join("\n")
+  const closingFence = lines.findIndex(
+    (line, index) => index > 0 && line.trim() === "---"
+  )
 
-  if (frontmatter.trim() === "") {
-    return {
-      empty: true,
-      filePath,
-      releases: [],
-    }
+  if (closingFence === -1) {
+    fail(`${filePath}: missing frontmatter fences.`)
   }
 
-  const releases: ReleaseEntry[] = []
-
-  for (const line of frontmatter.split("\n")) {
-    const trimmed = line.trim()
-
-    if (trimmed === "") {
-      continue
-    }
-
-    const releaseLine = changesetReleaseLinePattern.exec(trimmed)
-
-    if (releaseLine === null) {
-      fail(`${filePath}: malformed frontmatter line: ${trimmed}`)
-    }
-
-    const [, releasePackageName, releaseType] = releaseLine
-
-    if (!ReleaseType.allows(releaseType)) {
-      fail(
-        `${filePath}: unsupported release type "${releaseType}" for "${releasePackageName}".`
-      )
-    }
-
-    releases.push({ packageName: releasePackageName, releaseType })
-  }
+  const releaseLines = lines
+    .slice(1, closingFence)
+    .map((line) => line.trim())
+    .filter((line) => line !== "")
 
   return {
-    empty: false,
+    empty: releaseLines.length === 0,
     filePath,
-    releases,
+    releases: releaseLines.map((line) => parseReleaseLine(line, filePath)),
   }
 }
 
-function readChangedChangesets(
-  filePaths: string[]
-): Promise<ParsedChangeset[]> {
-  return Promise.all(
-    filePaths.map(async (filePath) => {
-      const content = await readFile(filePath, "utf8")
-      return parseChangeset(content, filePath)
-    })
-  )
-}
-
-function shouldSkipGeneratedVersionCommit(): boolean {
-  const latestCommitSubject = runGit(["log", "-1", "--pretty=%s"])
-
-  if (
-    latestCommitSubject.startsWith(
-      "chore(release): bump skill-language-server version"
+const readChangedChangesets = (filePaths: string[]) =>
+  Promise.all(
+    filePaths.map(async (filePath) =>
+      parseChangeset(await Bun.file(filePath).text(), filePath)
     )
-  ) {
+  )
+
+async function main() {
+  const latestCommitSubject = await git("log", "-1", "--pretty=%s")
+
+  if (latestCommitSubject.startsWith(GENERATED_VERSION_COMMIT_PREFIX)) {
     console.log(
       `Skipping release changeset enforcement for generated version commit: ${latestCommitSubject}`
     )
-    return true
-  }
-
-  return false
-}
-
-async function main(): Promise<void> {
-  if (shouldSkipGeneratedVersionCommit()) {
     return
   }
 
   const baseBranch = process.env.GITHUB_BASE_REF?.trim() || "main"
   const mergeBase =
-    tryRunGit(["merge-base", "HEAD", `origin/${baseBranch}`]) ??
-    tryRunGit(["merge-base", "HEAD", baseBranch]) ??
+    (await git("merge-base", "HEAD", `origin/${baseBranch}`).catch(
+      () => undefined
+    )) ??
+    (await git("merge-base", "HEAD", baseBranch).catch(() => undefined)) ??
     "HEAD"
-  const diffOutput = runGit([
+  const diffOutput = await git(
     "diff",
     "--name-status",
     "--diff-filter=ACMRD",
     mergeBase,
-    "HEAD",
-  ])
+    "HEAD"
+  )
   const changes = [
     ...parseNameStatus(diffOutput),
-    ...untrackedChangesetChanges(),
+    ...(await untrackedChangesetChanges()),
   ]
   const releasePaths = changedReleaseInputPaths(changes)
   const changesets = changedChangesetFiles(changes)
-  const parsePaths = parseableChangesetPaths(changesets)
 
   printDiagnostics(releasePaths, changesets)
 
-  const parsedChangesets = await readChangedChangesets(parsePaths)
+  const parsedChangesets = await readChangedChangesets(
+    parseableChangesetPaths(changesets)
+  )
 
   if (releasePaths.length === 0) {
     console.log("No published package inputs changed; no changeset required.")
@@ -373,21 +242,21 @@ async function main(): Promise<void> {
   }
 
   const hasPackageRelease = parsedChangesets.some((changeset) =>
-    changeset.releases.some((release) => release.packageName === packageName)
+    changeset.releases.some((release) => release.packageName === PACKAGE_NAME)
   )
   const hasEmptyChangeset = parsedChangesets.some(
     (changeset) => changeset.empty
   )
   const unsupportedReleases = parsedChangesets.flatMap((changeset) =>
     changeset.releases
-      .filter((release) => release.packageName !== packageName)
+      .filter((release) => release.packageName !== PACKAGE_NAME)
       .map((release) => `${changeset.filePath}: "${release.packageName}"`)
   )
 
   if (unsupportedReleases.length > 0) {
     fail(
       [
-        `Changesets in this repo may only release "${packageName}" or be empty.`,
+        `Changesets in this repo may only release "${PACKAGE_NAME}" or be empty.`,
         ...unsupportedReleases.map((release) => `- ${release}`),
       ].join("\n")
     )
@@ -399,7 +268,7 @@ async function main(): Promise<void> {
   }
 
   fail(
-    `Published package inputs changed, but no changed changeset targets "${packageName}" and no changed changeset is empty.`
+    `Published package inputs changed, but no changed changeset targets "${PACKAGE_NAME}" and no changed changeset is empty.`
   )
 }
 
