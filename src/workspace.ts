@@ -3,7 +3,7 @@ import { readdir, readFile, realpath, stat } from "node:fs/promises"
 import { basename, dirname, join, relative, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 import { type } from "arktype"
-import { minBy } from "es-toolkit"
+import { attemptAsync, minBy } from "es-toolkit"
 import ignore, { type Ignore } from "ignore"
 import {
   type Diagnostic,
@@ -353,30 +353,28 @@ export class Workspace {
 }
 
 async function loadSkillignore(root: string): Promise<Ignore | null> {
-  try {
-    return ignore().add(await readFile(join(root, ".skillignore"), "utf8"))
-  } catch {
-    return null
-  }
+  const [, loaded] = await attemptAsync(async () =>
+    ignore().add(await readFile(join(root, ".skillignore"), "utf8"))
+  )
+  return loaded
 }
 
 async function* walk(
   dir: string,
   ancestors = new Set<string>()
 ): AsyncGenerator<string> {
-  let real: string
-  let entries: Dirent[]
-  try {
-    // The cycle guard keys on real paths of the directories currently being
-    // walked, so a symlink loop terminates no matter which side it is entered
-    // from — but a dir merely reachable twice (symlink + direct path) is
-    // walked via both routes. Yielded paths stay symlink-side.
-    real = await realpath(dir)
-    if (ancestors.has(real)) {
-      return
-    }
-    entries = await readdir(dir, { withFileTypes: true })
-  } catch {
+  // The cycle guard keys on real paths of the directories currently being
+  // walked, so a symlink loop terminates no matter which side it is entered
+  // from — but a dir merely reachable twice (symlink + direct path) is
+  // walked via both routes. Yielded paths stay symlink-side.
+  const [, real] = await attemptAsync(() => realpath(dir))
+  if (real === null || ancestors.has(real)) {
+    return
+  }
+  const [, entries] = await attemptAsync(() =>
+    readdir(dir, { withFileTypes: true })
+  )
+  if (entries === null) {
     return
   }
   ancestors.add(real)
@@ -399,15 +397,14 @@ async function kindOf(
   path: string
 ): Promise<"dir" | "file" | null> {
   if (entry.isSymbolicLink()) {
-    try {
-      const s = await stat(path)
-      if (s.isDirectory()) {
-        return "dir"
-      }
-      return s.isFile() ? "file" : null
-    } catch {
+    const [, s] = await attemptAsync(() => stat(path))
+    if (s === null) {
       return null
     }
+    if (s.isDirectory()) {
+      return "dir"
+    }
+    return s.isFile() ? "file" : null
   }
   if (entry.isDirectory()) {
     return "dir"
