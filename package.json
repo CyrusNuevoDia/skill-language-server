@@ -44,6 +44,7 @@
     "@types/bun": "^1.1.0",
     "@types/node": "^22.0.0",
     "fast-check": "^4.9.0",
+    "mitata": "^1.0.34",
     "typescript": "^7.0.2",
     "ultracite": "7.9.4",
     "vscode-languageserver-protocol": "^3.18.2"

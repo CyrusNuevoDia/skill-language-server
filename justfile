@@ -46,6 +46,9 @@ bin: build-server
 test:
     bun test --parallel
 
+bench:
+    bun scripts/benchmark.ts
+
 # Typecheck (server + tests, VS Code extension), lint, and run the test suite
 check: && test
     bunx tsc --noEmit

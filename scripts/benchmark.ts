@@ -2,10 +2,11 @@
 // stages behind it (parseDoc, indexFile) and the index queries (diagnostics,
 // references). Synthetic corpora are generated once into the OS temp dir and
 // reused across runs, so before/after comparisons measure the code, not the
-// corpus. Usage: bun scripts/benchmark.ts [results.json]
+// corpus. Usage: just bench or bun scripts/benchmark.ts
 import { rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { bench, run } from "mitata"
 import { parseDoc } from "@/parse"
 import { uriOf } from "@/utils"
 import { Workspace } from "@/workspace"
@@ -14,16 +15,14 @@ import { Workspace } from "@/workspace"
 const CORPUS_VERSION = "1"
 
 type Corpus = {
-  /** Timed scan() iterations (a fifth of this again as warmup). */
-  iters: number
   name: string
   /** Out-of-scope files: walked by the traversal but never read or parsed. */
   notes: number
   skills: number
 }
 
-const MEDIUM: Corpus = { iters: 20, name: "medium", notes: 100, skills: 100 }
-const LARGE: Corpus = { iters: 10, name: "large", notes: 500, skills: 500 }
+const MEDIUM: Corpus = { name: "medium", notes: 100, skills: 100 }
+const LARGE: Corpus = { name: "large", notes: 500, skills: 500 }
 const CORPORA = [MEDIUM, LARGE]
 const COMMAND_COUNT = 5
 const PARSE_BATCH = 100
@@ -118,72 +117,16 @@ async function buildCorpus(dir: string, corpus: Corpus): Promise<void> {
   await Bun.write(marker, CORPUS_VERSION)
 }
 
-type Stats = {
-  iters: number
-  max: number
-  mean: number
-  min: number
-  p50: number
-}
-type Row = { name: string; stats: Stats }
-
-async function bench(
-  name: string,
-  iters: number,
-  fn: () => unknown
-): Promise<Row> {
-  const warmup = Math.max(2, Math.ceil(iters / 5))
-  for (let i = 0; i < warmup; i += 1) {
-    // biome-ignore lint/performance/noAwaitInLoops: warmup runs must finish before sampling starts
-    await fn()
-  }
-  const samples: number[] = []
-  for (let i = 0; i < iters; i += 1) {
-    const start = Bun.nanoseconds()
-    // biome-ignore lint/performance/noAwaitInLoops: timing samples must not overlap
-    await fn()
-    samples.push((Bun.nanoseconds() - start) / 1e6)
-  }
-  const sorted = samples.toSorted((a, b) => a - b)
-  return {
-    name,
-    stats: {
-      iters,
-      max: sorted.at(-1) ?? 0,
-      mean: sorted.reduce((sum, sample) => sum + sample, 0) / sorted.length,
-      min: sorted[0] ?? 0,
-      p50: sorted[Math.floor(sorted.length / 2)] ?? 0,
-    },
-  }
-}
-
-const ms = (value: number) => `${value.toFixed(3)}ms`.padStart(10)
-
-function printTable(rows: Row[]): void {
-  const nameWidth = Math.max(...rows.map((row) => row.name.length))
-  const columns = ["min", "p50", "mean", "max"]
-    .map((column) => column.padStart(10))
-    .join(" ")
-  console.log(`${"benchmark".padEnd(nameWidth)}  ${columns}  iters`)
-  for (const { name, stats } of rows) {
-    const cells = [stats.min, stats.p50, stats.mean, stats.max]
-      .map(ms)
-      .join(" ")
-    console.log(`${name.padEnd(nameWidth)}  ${cells}  ${stats.iters}`)
-  }
-}
-
-async function benchCorpusScan(
+async function registerCorpusScan(
   benchRoot: string,
   corpus: Corpus
-): Promise<Row> {
+): Promise<void> {
   const dir = join(benchRoot, corpus.name)
   await buildCorpus(dir, corpus)
   const probe = new Workspace(uriOf(dir))
   await probe.scan()
-  return bench(
+  bench(
     `scan: ${corpus.name} (${probe.files.size} indexed, ${corpus.notes} out-of-scope)`,
-    corpus.iters,
     () => new Workspace(uriOf(dir)).scan()
   )
 }
@@ -197,16 +140,13 @@ async function main() {
     "fixtures",
     "workspace"
   )
-  const rows: Row[] = []
 
-  rows.push(
-    await bench("scan: fixture workspace", 40, () =>
-      new Workspace(uriOf(fixtureRoot)).scan()
-    )
+  bench("scan: fixture workspace", () =>
+    new Workspace(uriOf(fixtureRoot)).scan()
   )
   for (const corpus of CORPORA) {
-    // biome-ignore lint/performance/noAwaitInLoops: benchmarks must run one at a time
-    rows.push(await benchCorpusScan(benchRoot, corpus))
+    // biome-ignore lint/performance/noAwaitInLoops: corpus setup and registration order must remain sequential
+    await registerCorpusScan(benchRoot, corpus)
   }
 
   const large = new Workspace(uriOf(join(benchRoot, LARGE.name)))
@@ -235,34 +175,11 @@ async function main() {
     }
   }
 
-  rows.push(
-    await bench(`parseDoc: one SKILL.md x${PARSE_BATCH}`, 30, parseBatch)
-  )
-  rows.push(
-    await bench(
-      `indexFile: all ${texts.length} large files (sync)`,
-      20,
-      indexAll
-    )
-  )
-  rows.push(
-    await bench("diagnosticsByURI: large", 15, () => large.diagnosticsByURI())
-  )
-  rows.push(
-    await bench(
-      `referencesTo: x${REFERENCE_BATCH} lookups (large)`,
-      20,
-      referenceBatch
-    )
-  )
-
-  printTable(rows)
-
-  const [, , jsonPath] = process.argv
-  if (jsonPath) {
-    await Bun.write(jsonPath, `${JSON.stringify(rows, null, 2)}\n`)
-    console.log(`\nwrote ${jsonPath}`)
-  }
+  bench(`parseDoc: one SKILL.md x${PARSE_BATCH}`, parseBatch)
+  bench(`indexFile: all ${texts.length} large files (sync)`, indexAll)
+  bench("diagnosticsByURI: large", () => large.diagnosticsByURI())
+  bench(`referencesTo: x${REFERENCE_BATCH} lookups (large)`, referenceBatch)
+  await run({ throw: true })
 }
 
 await main()
