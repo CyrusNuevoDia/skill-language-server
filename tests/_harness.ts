@@ -37,7 +37,7 @@ import {
   StreamMessageReader,
   StreamMessageWriter,
 } from "vscode-languageserver-protocol/node"
-import { startServer } from "../src/server"
+import { startServer } from "@/server"
 
 export const WORKSPACE = resolve(import.meta.dir, "fixtures", "workspace")
 

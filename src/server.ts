@@ -21,9 +21,9 @@ import {
   type WorkspaceEdit,
 } from "vscode-languageserver"
 import { TextDocument } from "vscode-languageserver-textdocument"
-import { BAD_PREV, fullRange } from "./parse"
-import { pathOf, rangeIn, uriOf } from "./utils"
-import { type Skill, SkillName, Workspace } from "./workspace"
+import { BAD_PREV, fullRange } from "@/parse"
+import { pathOf, rangeIn, uriOf } from "@/utils"
+import { type Skill, SkillName, Workspace } from "@/workspace"
 
 const TYPED_PREFIX = /^[a-z0-9_:-]*$/
 

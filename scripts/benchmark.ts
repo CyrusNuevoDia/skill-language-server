@@ -6,9 +6,9 @@
 import { rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { parseDoc } from "../src/parse"
-import { uriOf } from "../src/utils"
-import { Workspace } from "../src/workspace"
+import { parseDoc } from "@/parse"
+import { uriOf } from "@/utils"
+import { Workspace } from "@/workspace"
 
 /** Bump to force corpus regeneration after changing the generators below. */
 const CORPUS_VERSION = "1"

@@ -12,15 +12,15 @@ import {
   type Position,
   type Range,
 } from "vscode-languageserver"
-import { BUILTIN_COMMANDS } from "./builtins"
+import { BUILTIN_COMMANDS } from "@/builtins"
 import {
   type Frontmatter,
   fullRange,
   NAME_PATTERN,
   parseDoc,
   type Token,
-} from "./parse"
-import { containsPos, distance, uriOf, ZERO_RANGE } from "./utils"
+} from "@/parse"
+import { containsPos, distance, uriOf, ZERO_RANGE } from "@/utils"
 
 /** Full-string variant of the token grammar, plus the length cap for renames. */
 export const SkillName = type(new RegExp(`^${NAME_PATTERN}$`)).atMostLength(64)

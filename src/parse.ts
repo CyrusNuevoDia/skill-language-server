@@ -2,7 +2,7 @@ import { regex } from "arkregex"
 import { attempt } from "es-toolkit"
 import matter from "gray-matter"
 import type { Range } from "vscode-languageserver"
-import { rangeIn } from "./utils"
+import { rangeIn } from "@/utils"
 
 type FrontmatterFields = {
   description?: string
