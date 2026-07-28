@@ -2,7 +2,7 @@
 // stages behind it (parseDoc, indexFile) and the index queries (diagnostics,
 // references). Synthetic corpora are generated once into the OS temp dir and
 // reused across runs, so before/after comparisons measure the code, not the
-// corpus. Usage: bun scripts/bench.ts [results.json]
+// corpus. Usage: bun scripts/benchmark.ts [results.json]
 import { rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
