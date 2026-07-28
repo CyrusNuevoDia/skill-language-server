@@ -104,7 +104,7 @@ export class Workspace {
     }
   }
 
-  removeFile = ({ uri }: { uri: string }): FileEntry | null => {
+  removeFile({ uri }: { uri: string }): FileEntry | null {
     const entry = this.files.get(uri)
     if (!entry) {
       return null
@@ -115,11 +115,12 @@ export class Workspace {
   }
 
   /** Drop every indexed file at or under a filesystem path (folder deletes arrive as one event). */
-  removeUnder = (path: string): FileEntry[] =>
-    [...this.files.values()]
+  removeUnder(path: string): FileEntry[] {
+    return [...this.files.values()]
       .filter((f) => f.path === path || f.path.startsWith(path + sep))
-      .map(this.removeFile)
+      .map(this.removeFile.bind(this))
       .filter(Boolean)
+  }
 
   indexFile(path: string, text: string): FileEntry {
     const uri = uriOf(path)
@@ -168,17 +169,22 @@ export class Workspace {
     }
   }
 
-  skillOf = (name: string): Skill | undefined => this.skills.get(name)?.[0]
+  skillOf(name: string): Skill | undefined {
+    return this.skills.get(name)?.[0]
+  }
 
   /** The SKILL.md file entry backing a skill. */
-  entryOf = (skill: Skill): FileEntry | undefined =>
-    this.files.get(uriOf(skill.skillFilePath))
+  entryOf(skill: Skill): FileEntry | undefined {
+    return this.files.get(uriOf(skill.skillFilePath))
+  }
 
   /** Location of a skill's definition: the frontmatter `name:` value. */
-  definitionOf = (skill: Skill): Location => ({
-    range: this.entryOf(skill)?.frontmatter?.nameRange ?? ZERO_RANGE,
-    uri: uriOf(skill.skillFilePath),
-  })
+  definitionOf(skill: Skill): Location {
+    return {
+      range: this.entryOf(skill)?.frontmatter?.nameRange ?? ZERO_RANGE,
+      uri: uriOf(skill.skillFilePath),
+    }
+  }
 
   /** Every reference (name-part range) to a skill across scanned files. */
   referencesTo(name: string): Location[] {
@@ -194,8 +200,11 @@ export class Workspace {
   }
 
   /** The reference token at a position, if any (hit-test includes the sigil). */
-  tokenAt = (uri: string, pos: Position): Token | undefined =>
-    this.files.get(uri)?.tokens.find((t) => containsPos(fullRange(t), pos))
+  tokenAt(uri: string, pos: Position): Token | undefined {
+    return this.files
+      .get(uri)
+      ?.tokens.find((t) => containsPos(fullRange(t), pos))
+  }
 
   /** The skill declaration (frontmatter `name:` value) containing this position. */
   declAt(
@@ -243,14 +252,16 @@ export class Workspace {
     return out
   }
 
-  diagnosticsFor = (
+  diagnosticsFor(
     entry: FileEntry,
     commands = this.commandNames(),
     nearMisses: NearMissMemo = new Map()
-  ): Diagnostic[] => [
-    ...this.referenceDiagnostics(entry, commands, nearMisses),
-    ...this.declarationDiagnostics(entry),
-  ]
+  ): Diagnostic[] {
+    return [
+      ...this.referenceDiagnostics(entry, commands, nearMisses),
+      ...this.declarationDiagnostics(entry),
+    ]
+  }
 
   /** Diagnostics for every indexed file, sharing one command-name and near-miss pass. */
   diagnosticsByURI(): Map<string, Diagnostic[]> {
