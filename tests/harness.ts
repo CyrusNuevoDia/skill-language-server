@@ -249,7 +249,7 @@ export class Client {
   async diagnosticsFor(rel: string, timeoutMs = 3000): Promise<Diagnostic[]> {
     const uri = this.uriFor(rel)
     const deadline = Date.now() + timeoutMs
-    for (;;) {
+    for (; ;) {
       const published = this.diagnostics.get(uri)
       if (published) {
         return published
@@ -333,5 +333,7 @@ export function completionItemsOf(res: unknown): CompletionItem[] {
   if (!res) {
     return []
   }
-  return Array.isArray(res) ? res : ((res as CompletionList).items ?? [])
+  return Array.isArray(res)
+    ? (res as CompletionItem[])
+    : ((res as CompletionList).items ?? [])
 }
