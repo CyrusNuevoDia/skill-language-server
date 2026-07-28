@@ -98,6 +98,8 @@ jobs:
     permissions:
       contents: write
       id-token: write
+    env:
+      HAS_OVSX: ${{ secrets.OVSX_PAT != '' }}
     steps:
       - uses: actions/checkout@v6
         name: checkout
@@ -169,3 +171,17 @@ jobs:
           fi
           echo "published=true" >> "$GITHUB_OUTPUT"
           git push origin --tags || echo "::warning::Failed to push git tags for the published release."
+      - if: ${{ env.HAS_OVSX == 'true' }}
+        name: publish[openvsx]
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: |
+          version="${{ steps.publish.outputs.version }}"
+          extension="https://open-vsx.org/api/cyrusnewday/skill-language-server/$version"
+
+          if curl -sfo /dev/null "$extension"; then
+            echo "cyrusnewday.skill-language-server@$version is already on Open VSX; skipping."
+            exit 0
+          fi
+
+          just publish-openvsx

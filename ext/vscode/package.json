@@ -41,6 +41,7 @@
   "devDependencies": {
     "@types/node": "^22",
     "@types/vscode": "^1.85.0",
-    "@vscode/vsce": "^3.0.0"
+    "@vscode/vsce": "^3.0.0",
+    "ovsx": "^0.10.1"
   }
 }

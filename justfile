@@ -21,6 +21,10 @@ build-vscode:
     cd ext/vscode && bun build --target=node --format=cjs --external=vscode --outfile=dist/extension.js src/extension.ts
     cd ext/vscode && bunx @vscode/vsce package --no-dependencies --out ../../dist/skill-language-server.vsix
 
+# Publish the .vsix to Open VSX — Cursor, Antigravity, VSCodium, Windsurf. Needs $OVSX_PAT
+publish-openvsx: build-vscode
+    cd ext/vscode && bunx ovsx publish ../../dist/skill-language-server.vsix
+
 # Zed extension wasm (Zed rebuilds dev extensions itself; this verifies + copies)
 build-zed:
     mkdir -p dist
