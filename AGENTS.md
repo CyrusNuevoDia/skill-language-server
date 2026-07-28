@@ -7,7 +7,7 @@ renames the skill folder (`RenameFile`), the frontmatter `name:` value, and ever
 reference across the workspace.
 
 **The test suite is the contract.** Definition of done: `bun install` +
-`just check` + `bun test` all clean — run them, never grade from memory. Spec
+`just check` all clean — run them, never grade from memory. Spec
 decisions live in this file and in the tests; change tests only when the spec
 itself changes, stated out loud, never to make an implementation pass.
 
@@ -18,12 +18,12 @@ Tools come from mise (`mise trust && mise install` on first checkout).
 | Command      | What                                                                                                  |
 | ------------ | ----------------------------------------------------------------------------------------------------- |
 | `bun test`   | Full suite; single file: `bun test tests/rename.test.ts`; single test: `bun test -t "rename rejects"` |
-| `just check` | tsc (root + vscode-extension) + ultracite lint                                                        |
+| `just check` | tsc (root + vscode-extension) + ultracite lint + the full test suite                                  |
 | `just fmt`   | ultracite fix --unsafe — ALWAYS use this instead of fixing format/lint complaints by hand             |
 | `just build` | All artifacts into dist/: standalone binary, VS Code .vsix, Zed wasm                                  |
 | `just bin`   | Build + install server binary to ~/.local/bin/skill-language-server (what Zed launches)               |
 
-Verifier = `bun install` + `just check` + `bun test` all clean. Run it before
+Verifier = `bun install` + `just check` all clean. Run it before
 declaring anything done. After server changes, refresh installed clients:
 `just bin` (Zed) and `just build && code --install-extension dist/skill-language-server.vsix`
 (VS Code).

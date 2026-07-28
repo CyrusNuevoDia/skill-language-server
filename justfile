@@ -46,8 +46,8 @@ bin: build-server
 test:
     bun test
 
-# Typecheck (server + tests, VS Code extension) and lint
-check:
+# Typecheck (server + tests, VS Code extension), lint, and run the test suite
+check: && test
     bunx tsc --noEmit
     bunx tsc --noEmit -p ext/vscode
     bunx ultracite check
