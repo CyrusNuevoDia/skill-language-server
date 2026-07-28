@@ -1,18 +1,17 @@
 # skill-language-server
 
 [![npm](https://img.shields.io/npm/v/skill-language-server)](https://www.npmjs.com/package/skill-language-server)
+[![Open VSX](https://img.shields.io/open-vsx/v/cyrusnewday/skill-language-server?label=Open%20VSX&color=C160EF)](https://open-vsx.org/extension/cyrusnewday/skill-language-server)
 [![Zed](https://img.shields.io/badge/Zed-extension-084CCF)](https://zed.dev/extensions/skill-language-server)
 [![CI](https://github.com/CyrusNuevoDia/skill-language-server/actions/workflows/ci.yml/badge.svg)](https://github.com/CyrusNuevoDia/skill-language-server/actions/workflows/ci.yml)
 
-A language server for agent skills — `/skill-name` and `$skill-name` become real symbols in VS Code, Zed, Neovim, and Helix.
+Your skill library now has tooling.
 
 ▸ completion w/ descriptions on `/` and `$`\
 ▸ "did you mean" on typos\
 ▸ go to definition, find references\
 ▸ F2 rename w/ editor undo — folder, frontmatter `name:`, and every reference update as one edit\
 ▸ clickable links + semantic highlighting on resolved references
-
-Your skill library now has tooling.
 
 ## Why
 
@@ -22,18 +21,36 @@ Quiet by design — a false reference in prose costs more than a missed one:
 
 - Fenced code blocks are never parsed; inline code spans are (that's how people write skill names in prose)
 - `/usr/bin`, `$PATH`, `docs/` — never references, never popups
-- Near miss of a real skill (edit distance ≤ 2) → *did you mean* warning; other unresolved `/name` → info hint; unresolved `$name` → silent
+- Near miss of a real skill (edit distance ≤ 2) → _did you mean_ warning; other unresolved `/name` → info hint; unresolved `$name` → silent
 - Built-in commands (`/help`, `/compact`, …) and your own `.claude/commands`/`.codex/prompts` are commands, not skills — never flagged
 
 It's a language server, not a linter — pair with `skill-lint` or `agnix` for structural/security linting.
 
 ## Install
 
-[VS Code](#vs-code) · [Zed](#zed) · [Neovim](#neovim-011) · [Helix](#helix) · [from source](#from-source)
+[Cursor / Antigravity / VSCodium](#cursor--antigravity--vscodium) · [Zed](#zed) · [VS Code](#vs-code) · [Neovim](#neovim-011) · [Helix](#helix) · [from source](#from-source)
 
 Once installed: cursor on any `/skill-name`, hit `F2`, type a new name — folder, frontmatter, and every reference update as one undo step.
 
+### Cursor / Antigravity / VSCodium
+
+[**Install the extension**](https://open-vsx.org/extension/cyrusnewday/skill-language-server) — or `cmd-shift-x` → search _Skill Language Server_. Same for Windsurf and anything else pointed at Open VSX. The extension bundles the server; nothing else to install.
+
+### Zed
+
+[**Install the extension**](https://zed.dev/extensions/skill-language-server) — or `cmd-shift-x` → search _Skill Language Server_. It fetches the server itself; nothing else to install.
+
+From a clone instead: command palette → `zed: install dev extension` → select `ext/zed/`. After server updates, `editor: restart language server`.
+
 ### VS Code
+
+Marketplace listing pending. Until then, download the `.vsix` from [Open VSX](https://open-vsx.org/extension/cyrusnewday/skill-language-server) and:
+
+```sh
+code --install-extension skill-language-server-*.vsix
+```
+
+Or build it from a clone:
 
 ```sh
 git clone https://github.com/CyrusNuevoDia/skill-language-server
@@ -42,14 +59,6 @@ mise trust && mise install && bun install
 just build-vscode
 code --install-extension dist/skill-language-server.vsix
 ```
-
-(Marketplace listing pending — the .vsix bundles the server.)
-
-### Zed
-
-[**Install the extension**](https://zed.dev/extensions/skill-language-server) — or `cmd-shift-x` → search *Skill Language Server*. It fetches the server itself; nothing else to install.
-
-From a clone instead: command palette → `zed: install dev extension` → select `ext/zed/`. After server updates, `editor: restart language server`.
 
 ### Neovim (0.11+)
 
