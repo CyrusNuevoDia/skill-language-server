@@ -1,5 +1,15 @@
 # skill-language-server
 
+## 0.6.0
+
+### Minor Changes
+
+- [`eb74002`](https://github.com/CyrusNuevoDia/skill-language-server/commit/eb7400280678a0f7db8af87fd6e4c557f643c060) Thanks [@CyrusNuevoDia](https://github.com/CyrusNuevoDia)! - Symlinked skill folders now resolve (dotfile-managed setups work; the index keeps symlink-side paths), completion accepting a multi-segment name no longer mangles the typed prefix (items carry an explicit textEdit), and rename from a duplicate skill's frontmatter renames that skill's own folder instead of the first-indexed twin. Diagnostics are only published when non-empty (plus one clearing publish when a file goes clean), so Neovim stops accumulating phantom buffers. Parser fixes: CommonMark fence pairing (a `~~~` line inside a ```block no longer ends it),`~/paths`are never skill references, frontmatter delimiters must sit at column 0, one wrong-typed frontmatter field no longer erases the others, and a YAML comment after`name:` survives rename. Closing a dirty buffer without saving reverts to disk truth; deleting a skill folder evicts everything under it. All filesystem I/O is now async behind an ordering-preserving queue. Frontmatter delimiter and YAML semantics now match gray-matter — the node-ecosystem standard for frontmatter, and how skill loaders actually parse these files.
+
+### Patch Changes
+
+- [`7209e13`](https://github.com/CyrusNuevoDia/skill-language-server/commit/7209e13c383df4c6bbe284ddbbefa7536a29bb55) Thanks [@CyrusNuevoDia](https://github.com/CyrusNuevoDia)! - Publish the editor extension to the VS Code Marketplace, alongside Open VSX. The extension's display name becomes "Agent Skills Language Server" (the Marketplace rejects "Skill Language Server" as too similar to "SQL Language Server"), and the manifest gains a Marketplace-facing README and one-click install badge.
+
 ## 0.5.2
 
 ### Patch Changes
