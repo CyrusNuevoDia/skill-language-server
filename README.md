@@ -2,7 +2,7 @@
 
 [![npm](https://img.shields.io/npm/v/skill-language-server)](https://www.npmjs.com/package/skill-language-server)
 [![Open VSX](https://img.shields.io/open-vsx/v/cyrusnewday/skill-language-server?label=Open%20VSX&color=C160EF)](https://open-vsx.org/extension/cyrusnewday/skill-language-server)
-[![VS Marketplace](https://img.shields.io/visual-studio-marketplace/v/cyrusnewday.skill-language-server?label=VS%20Marketplace&color=007ACC)](https://marketplace.visualstudio.com/items?itemName=cyrusnewday.skill-language-server)
+[![VS Marketplace](https://vsmarketplacebadges.dev/version-short/cyrusnewday.skill-language-server.svg?label=VS%20Marketplace&color=007ACC)](https://marketplace.visualstudio.com/items?itemName=cyrusnewday.skill-language-server)
 [![Zed](https://img.shields.io/badge/Zed-extension-084CCF)](https://zed.dev/extensions/skill-language-server)
 [![CI](https://github.com/CyrusNuevoDia/skill-language-server/actions/workflows/ci.yml/badge.svg)](https://github.com/CyrusNuevoDia/skill-language-server/actions/workflows/ci.yml)
 
@@ -46,16 +46,6 @@ From a clone instead: command palette → `zed: install dev extension` → selec
 ### VS Code
 
 [**Install the extension**](https://marketplace.visualstudio.com/items?itemName=cyrusnewday.skill-language-server) — or `cmd-shift-x` → search _Agent Skills Language Server_. The extension bundles the server; nothing else to install.
-
-Or build it from a clone:
-
-```sh
-git clone https://github.com/CyrusNuevoDia/skill-language-server
-cd skill-language-server
-mise trust && mise install && bun install
-just build-vscode
-code --install-extension dist/skill-language-server.vsix
-```
 
 ### Neovim (0.11+)
 
@@ -102,9 +92,18 @@ code --install-extension dist/skill-language-server.vsix
 ### From source
 
 ```sh
+git clone https://github.com/CyrusNuevoDia/skill-language-server
+cd skill-language-server
 mise trust && mise install   # bun, just (rust only for the Zed wasm)
 bun install
-just bin                     # → ~/.local/bin/skill-language-server
+just bin                     # → ~/.local/bin/skill-language-server (Neovim, Helix, Zed)
+```
+
+For the VS Code–family editors, build and sideload the extension instead:
+
+```sh
+just build-vscode
+code --install-extension dist/skill-language-server.vsix   # or cursor / codium / …
 ```
 
 ## How it scans
