@@ -3,7 +3,7 @@ import { readdir, readFile, realpath, stat } from "node:fs/promises"
 import { basename, dirname, join, relative, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 import { type } from "arktype"
-import { attemptAsync, minBy } from "es-toolkit"
+import { attemptAsync } from "es-toolkit"
 import ignore, { type Ignore } from "ignore"
 import {
   type Diagnostic,
@@ -30,6 +30,11 @@ const SCAN_SEGMENTS = new Set([".claude", ".agents", ".codex", "skills"])
 /** Agent memory files reference skills from anywhere in the tree. */
 const SCAN_BASENAMES = new Set(["CLAUDE.md", "AGENTS.md"])
 const SKIP_DIRS = new Set(["node_modules", ".git", "dist", "build"])
+
+/** Max edit distance for a "did you mean" near-miss suggestion. */
+const NEAR_MISS_DISTANCE = 2
+/** Unknown token name → nearest skill name within the threshold (null = none). */
+type NearMissMemo = Map<string, string | null>
 
 export type Skill = {
   folderPath: string
@@ -238,33 +243,64 @@ export class Workspace {
     return out
   }
 
-  diagnosticsFor(
+  diagnosticsFor = (
     entry: FileEntry,
-    commands = this.commandNames()
-  ): Diagnostic[] {
-    return [
-      ...this.referenceDiagnostics(entry, commands),
-      ...this.declarationDiagnostics(entry),
-    ]
-  }
+    commands = this.commandNames(),
+    nearMisses: NearMissMemo = new Map()
+  ): Diagnostic[] => [
+    ...this.referenceDiagnostics(entry, commands, nearMisses),
+    ...this.declarationDiagnostics(entry),
+  ]
 
-  /** Diagnostics for every indexed file, sharing one command-name pass. */
+  /** Diagnostics for every indexed file, sharing one command-name and near-miss pass. */
   diagnosticsByURI(): Map<string, Diagnostic[]> {
     const commands = this.commandNames()
+    const nearMisses: NearMissMemo = new Map()
     return new Map(
       [...this.files.values()].map((entry) => [
         entry.uri,
-        this.diagnosticsFor(entry, commands),
+        this.diagnosticsFor(entry, commands, nearMisses),
       ])
     )
   }
 
+  /**
+   * Nearest skill name within edit distance {@link NEAR_MISS_DISTANCE}, or
+   * null. Memoizable across a whole diagnostics pass because the skill set
+   * doesn't change mid-pass; keyed on the token name alone (sigil affects
+   * which diagnostic is emitted, never the nearest name).
+   */
+  private nearestSkillName(target: string, memo: NearMissMemo): string | null {
+    const cached = memo.get(target)
+    if (cached !== undefined) {
+      return cached
+    }
+    let best: string | null = null
+    let bestDistance = NEAR_MISS_DISTANCE + 1
+    for (const name of this.skills.keys()) {
+      // A length gap beyond the threshold bounds the distance above it.
+      if (Math.abs(name.length - target.length) > NEAR_MISS_DISTANCE) {
+        continue
+      }
+      const d = distance(target, name)
+      if (d < bestDistance) {
+        best = name
+        bestDistance = d
+        if (d === 1) {
+          break // 0 is impossible for an unknown name; 1 can't be beaten
+        }
+      }
+    }
+    memo.set(target, best)
+    return best
+  }
+
   private referenceDiagnostics(
     entry: FileEntry,
-    commands: Set<string>
+    commands: Set<string>,
+    nearMisses: NearMissMemo
   ): Diagnostic[] {
     const out: Diagnostic[] = []
-    const names = [...this.skills.keys()]
 
     for (const token of entry.tokens) {
       if (this.skills.has(token.name)) {
@@ -276,8 +312,8 @@ export class Workspace {
       ) {
         continue // a command, not a skill — never diagnosed
       }
-      const near = minBy(names, (name) => distance(token.name, name))
-      if (near && distance(token.name, near) <= 2) {
+      const near = this.nearestSkillName(token.name, nearMisses)
+      if (near) {
         out.push({
           message: `Unknown skill "${token.name}". Did you mean "${near}"?`,
           range: token.nameRange,
