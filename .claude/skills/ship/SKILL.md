@@ -16,7 +16,7 @@ The subagent's prompt must be self-contained and include this pipeline verbatim:
    - `mise exec -- just bin`
    - `code --install-extension dist/skill-language-server.vsix`
 2. **Verify it works**
-   - `mise exec -- just check` and `bun test` — all green
+   - `mise exec -- just check` — all green (includes the full test suite)
    - stdio smoke test: pipe an LSP `initialize` request (Content-Length framed)
      into `~/.local/bin/skill-language-server --stdio`, keeping stdin open ~2s,
      and confirm a `capabilities` response comes back

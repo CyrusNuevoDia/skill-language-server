@@ -128,10 +128,9 @@ Checked against client source as of 2026-07: VS Code, Zed, Helix, and Neovim all
 ## Development
 
 ```sh
-just check   # tsc (server + VS Code extension) + ultracite lint + bun test
-bun test     # just the protocol-level tests against a fixture workspace
-just build   # everything into dist/ — binary, .vsix, Zed wasm (wasm needs rust)
 just fmt     # ultracite fix --unsafe
+just check   # tsc (server + VS Code extension) + ultracite lint + bun test
+just build   # everything into dist/ — binary, .vsix, Zed wasm (wasm needs rust)
 ```
 
 The test suite is the contract: `tests/helpers/harness.ts` boots the real server over in-memory streams; `tests/corpus.ts` is the ground-truth reference set. Done = `just check` green.
