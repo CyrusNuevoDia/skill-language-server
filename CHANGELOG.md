@@ -1,5 +1,11 @@
 # skill-language-server
 
+## 0.5.2
+
+### Patch Changes
+
+- [`4eeefb6`](https://github.com/CyrusNuevoDia/skill-language-server/commit/4eeefb60875d92ebe9a4ece2924fac8e289622c0) Thanks [@CyrusNuevoDia](https://github.com/CyrusNuevoDia)! - Publish the editor extension to Open VSX — installable from Extensions in Cursor, Antigravity, VSCodium, and Windsurf. The extension manifest now carries an icon, a marketplace README, and the root package's version.
+
 ## 0.5.1
 
 ### Patch Changes
