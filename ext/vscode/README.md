@@ -1,4 +1,4 @@
-# Skill Language Server
+# Agent Skills Language Server
 
 `/skill-name` and `$skill-name` become real symbols — in Cursor, Antigravity, VSCodium, Windsurf, and VS Code.
 

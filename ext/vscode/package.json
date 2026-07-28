@@ -1,6 +1,6 @@
 {
   "name": "skill-language-server",
-  "displayName": "Skill Language Server",
+  "displayName": "Agent Skills Language Server",
   "description": "Go-to-definition, find-references, completion, and cross-file rename for agent skills (SKILL.md)",
   "version": "0.5.1",
   "publisher": "cyrusnewday",

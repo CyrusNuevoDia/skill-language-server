@@ -25,6 +25,10 @@ build-vscode:
 publish-openvsx: build-vscode
     cd ext/vscode && bunx ovsx publish ../../dist/skill-language-server.vsix
 
+# Publish the .vsix to the VS Code Marketplace. Needs $VSCE_PAT
+publish-vscode: build-vscode
+    cd ext/vscode && bunx @vscode/vsce publish --packagePath ../../dist/skill-language-server.vsix
+
 # Zed extension wasm (Zed rebuilds dev extensions itself; this verifies + copies)
 build-zed:
     mkdir -p dist

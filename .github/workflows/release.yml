@@ -100,6 +100,7 @@ jobs:
       id-token: write
     env:
       HAS_OVSX: ${{ secrets.OVSX_PAT != '' }}
+      HAS_VSCE: ${{ secrets.VSCE_PAT != '' }}
     steps:
       - uses: actions/checkout@v6
         name: checkout
@@ -185,3 +186,8 @@ jobs:
           fi
 
           just publish-openvsx
+      - if: ${{ env.HAS_VSCE == 'true' }}
+        name: publish[vscode]
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: just publish-vscode

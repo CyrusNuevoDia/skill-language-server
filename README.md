@@ -2,6 +2,7 @@
 
 [![npm](https://img.shields.io/npm/v/skill-language-server)](https://www.npmjs.com/package/skill-language-server)
 [![Open VSX](https://img.shields.io/open-vsx/v/cyrusnewday/skill-language-server?label=Open%20VSX&color=C160EF)](https://open-vsx.org/extension/cyrusnewday/skill-language-server)
+[![VS Marketplace](https://img.shields.io/visual-studio-marketplace/v/cyrusnewday.skill-language-server?label=VS%20Marketplace&color=007ACC)](https://marketplace.visualstudio.com/items?itemName=cyrusnewday.skill-language-server)
 [![Zed](https://img.shields.io/badge/Zed-extension-084CCF)](https://zed.dev/extensions/skill-language-server)
 [![CI](https://github.com/CyrusNuevoDia/skill-language-server/actions/workflows/ci.yml/badge.svg)](https://github.com/CyrusNuevoDia/skill-language-server/actions/workflows/ci.yml)
 
@@ -44,11 +45,7 @@ From a clone instead: command palette → `zed: install dev extension` → selec
 
 ### VS Code
 
-Marketplace listing pending. Until then, download the `.vsix` from [Open VSX](https://open-vsx.org/extension/cyrusnewday/skill-language-server) and:
-
-```sh
-code --install-extension skill-language-server-*.vsix
-```
+[**Install the extension**](https://marketplace.visualstudio.com/items?itemName=cyrusnewday.skill-language-server) — or `cmd-shift-x` → search _Agent Skills Language Server_. The extension bundles the server; nothing else to install.
 
 Or build it from a clone:
 
