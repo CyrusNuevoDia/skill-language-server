@@ -62,6 +62,34 @@ test("a wrong-typed frontmatter field does not erase the well-typed name", async
   await c.close(rel)
 })
 
+test("tokens inside frontmatter are never scanned", async () => {
+  const rel = ".claude/skills/shipping/SKILL.md"
+  const diags = await diagnosticsWith(
+    rel,
+    "---\nname: shipping\ndescription: /qqzzqq\n---\n"
+  )
+  expect(diags).toBeUndefined()
+  await c.close(rel)
+})
+
+test("empty frontmatter yields no fields and scanning resumes after it", async () => {
+  const rel = ".claude/skills/shipping/SKILL.md"
+  const diags = await diagnosticsWith(rel, "---\n---\n/qqzzqq\n")
+  expect(diags?.some((d) => String(d.message).includes("missing"))).toBe(true)
+  expect(diags?.some((d) => String(d.message).includes("qqzzqq"))).toBe(true)
+  await c.close(rel)
+})
+
+test("malformed YAML frontmatter is token-scanned as body", async () => {
+  const rel = ".claude/skills/shipping/SKILL.md"
+  const diags = await diagnosticsWith(
+    rel,
+    "---\nname: [unclosed\ndescription: /qqzzqq\n---\n"
+  )
+  expect(diags?.some((d) => String(d.message).includes("qqzzqq"))).toBe(true)
+  await c.close(rel)
+})
+
 test("a YAML comment after the name stays outside the declaration range", async () => {
   const rel = ".claude/skills/shipping/SKILL.md"
   await c.open(rel, "---\nname: shipping # owned by logistics\n---\n")

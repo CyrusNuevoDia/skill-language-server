@@ -54,8 +54,9 @@ Three server modules in `src/`, each a layer:
   with CommonMark pairing — only a closer with the same marker char and at
   least the opening length ends a fence (a `~~~` line inside a ``` block is
   content); inline code spans are NOT (people write `` `/skill` `` in prose).
-  Frontmatter delimiters must sit at column 0 (an indented `---` in a block
-  scalar is content); fields are salvaged per key, so one wrong-typed field
+  Frontmatter delimiter and YAML semantics are gray-matter's: delimiters sit
+  at column 0, and an indented `---` in a block scalar is content; fields are
+  salvaged per key, so one wrong-typed field
   never erases the others; the `name:` range anchors to the YAML-parsed value
   (quotes and trailing comments stay outside it) so diagnostics/renames target
   it exactly.

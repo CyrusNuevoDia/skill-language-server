@@ -1,8 +1,7 @@
 import { regex } from "arkregex"
-import { type } from "arktype"
 import { attempt } from "es-toolkit"
+import matter from "gray-matter"
 import type { Range } from "vscode-languageserver"
-import { parse as parseYAML } from "yaml"
 import { rangeIn } from "./utils"
 
 type FrontmatterFields = {
@@ -49,9 +48,12 @@ const FENCE = /^ {0,3}(`{3,}|~{3,})/
 /** A closing fence: marker only, nothing after but whitespace. */
 const FENCE_CLOSE = /^ {0,3}(`{3,}|~{3,})[ \t]*$/
 const NAME_LINE = regex("^name:\\s*(\\S.*?)\\s*$")
-/** YAML document delimiters must sit at column 0 — an indented `---` is content. */
-const OPEN_DELIM = /^---[ \t]*$/
-const CLOSE_DELIM = /^(?:---|\.\.\.)[ \t]*$/
+
+// Exists solely so every matter() call passes an options object: gray-matter
+// memoizes results in an unbounded module-level cache keyed on the raw input
+// string, and skips that cache only when options are present — without this,
+// a server reparsing on every keystroke leaks every buffer state ever seen.
+const MATTER_OPTIONS = {}
 
 /** Per CommonMark, only a closer with the same marker char and at least the opening length ends a fence. */
 const closesFence = (line: string, opening: string): boolean =>
@@ -59,7 +61,7 @@ const closesFence = (line: string, opening: string): boolean =>
 
 export function parseDoc(text: string): ParsedDoc {
   const lines = text.split("\n")
-  const frontmatter = parseFrontmatter(lines)
+  const frontmatter = parseFrontmatter(text, lines)
 
   const tokens: Token[] = []
   const fenced = new Set<number>()
@@ -107,22 +109,30 @@ function scanTokens(line: string, lineNo: number, tokens: Token[]): void {
   }
 }
 
-function parseFrontmatter(lines: string[]): Frontmatter | null {
-  if (!(lines[0] && OPEN_DELIM.test(lines[0]))) {
-    return null
-  }
-  const close = lines.findIndex((l, i) => i > 0 && CLOSE_DELIM.test(l))
-  if (close === -1) {
+function parseFrontmatter(text: string, lines: string[]): Frontmatter | null {
+  // matter() throws on malformed YAML (js-yaml errors propagate) and on a
+  // `---foo` first line naming an unregistered engine: either way that's a
+  // doc without usable frontmatter, not an error.
+  const [, file] = attempt(() => matter(text, MATTER_OPTIONS))
+  if (!file) {
     return null
   }
 
-  // Malformed YAML: fall back to no fields; diagnostics may cover this later.
-  const [, parsed] = attempt(() => parseYAML(lines.slice(1, close).join("\n")))
-  const data: unknown = parsed ?? {}
-  const fields = fieldsOf(data)
+  // endLine is positional and stays ours: gray-matter reports only the
+  // frontmatter/content split, so count the lines it consumed as frontmatter.
+  const consumed = text.slice(0, text.length - file.content.length)
+  let endLine = consumed.split("\n").length - 1
+  if (file.content === "" && consumed !== "" && !consumed.endsWith("\n")) {
+    endLine += 1 // the closing delimiter is an unterminated final line
+  }
+  if (endLine === 0) {
+    return null // gray-matter consumed nothing: no frontmatter
+  }
+
+  const fields = fieldsOf(file.data)
 
   let nameRange: Range | undefined
-  for (let i = 1; i < close; i += 1) {
+  for (let i = 1; i < endLine && i < lines.length; i += 1) {
     const m = NAME_LINE.exec(lines[i])
     if (m) {
       // Anchor to the YAML-parsed value when it appears verbatim, so quotes
@@ -137,12 +147,10 @@ function parseFrontmatter(lines: string[]): Frontmatter | null {
 
   return {
     ...fields,
-    endLine: close + 1,
+    endLine,
     nameRange,
   }
 }
-
-const StringValue = type("string")
 
 /** Salvage fields one by one: a wrong-typed field must not erase the others. */
 function fieldsOf(data: unknown): FrontmatterFields {
@@ -151,10 +159,10 @@ function fieldsOf(data: unknown): FrontmatterFields {
   }
   const record = data as Record<string, unknown>
   const fields: FrontmatterFields = {}
-  if (StringValue.allows(record.name)) {
+  if (typeof record.name === "string") {
     fields.name = record.name
   }
-  if (StringValue.allows(record.description)) {
+  if (typeof record.description === "string") {
     fields.description = record.description
   }
   return fields
