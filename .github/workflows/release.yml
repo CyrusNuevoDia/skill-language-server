@@ -51,7 +51,7 @@ jobs:
 
           while IFS= read -r file; do
             case "$file" in
-              src/*|package.json|bun.lock|README.md|CHANGELOG.md|justfile|.changeset/*.md|scripts/check-release-changeset.ts|.github/workflows/*)
+              src/*|ext/*|package.json|bun.lock|README.md|CHANGELOG.md|justfile|.changeset/*.md|scripts/check-release-changeset.ts|.github/workflows/*)
                 check_changeset=true
                 ;;
             esac

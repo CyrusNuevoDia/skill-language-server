@@ -108,6 +108,7 @@ function isReleaseInputPath(filePath: string): boolean {
     filePath === "CHANGELOG.md" ||
     filePath === "justfile" ||
     filePath.startsWith("src/") ||
+    filePath.startsWith("ext/") ||
     filePath.startsWith(".changeset/") ||
     filePath === "scripts/check-release-changeset.ts" ||
     filePath.startsWith(".github/workflows/")
