@@ -44,7 +44,7 @@ bin: build-server
     cp dist/skill-language-server ~/.local/bin/skill-language-server
 
 test:
-    bun test
+    bun test --parallel
 
 # Typecheck (server + tests, VS Code extension), lint, and run the test suite
 check: && test
