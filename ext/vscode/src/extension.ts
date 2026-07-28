@@ -9,26 +9,32 @@ import {
 
 let client: LanguageClient | undefined
 
-export function activate(context: ExtensionContext): void {
+// Attach to all markdown; the server self-filters to skill scope
+// (skills/ dirs plus .claude/.agents/.codex) and stays quiet elsewhere.
+const CLIENT_OPTIONS = {
+  documentSelector: [{ language: "markdown", scheme: "file" }],
+} as const satisfies LanguageClientOptions
+
+function serverOptions(context: ExtensionContext): ServerOptions {
   const serverModule = context.asAbsolutePath(join("dist", "server.js"))
-  const serverOptions: ServerOptions = {
-    debug: { module: serverModule, transport: TransportKind.ipc },
+  return {
+    debug: {
+      module: serverModule,
+      options: { execArgv: ["--nolazy", "--inspect=6009"] },
+      transport: TransportKind.ipc,
+    },
     run: { module: serverModule, transport: TransportKind.ipc },
   }
-  // Attach to all markdown; the server self-filters to skill scope
-  // (skills/ dirs plus .claude/.agents/.codex) and stays quiet elsewhere.
-  const clientOptions: LanguageClientOptions = {
-    documentSelector: [{ language: "markdown", scheme: "file" }],
-  }
+}
+
+export function activate(context: ExtensionContext): void {
   client = new LanguageClient(
     "skill-language-server",
     "Skill Language Server",
-    serverOptions,
-    clientOptions
+    serverOptions(context),
+    CLIENT_OPTIONS
   )
   client.start()
 }
 
-export function deactivate(): Thenable<void> | undefined {
-  return client?.stop()
-}
+export const deactivate = () => client?.stop()
