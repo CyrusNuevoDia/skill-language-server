@@ -35,7 +35,7 @@ Once installed: cursor on any `/skill-name`, hit `F2`, type a new name — folde
 
 ### Cursor / Antigravity / VSCodium
 
-[**Install the extension**](https://open-vsx.org/extension/cyrusnewday/skill-language-server) — or `cmd-shift-x` → search _Skill Language Server_. Same for Windsurf and anything else pointed at Open VSX. The extension bundles the server; nothing else to install.
+[**Install the extension**](https://open-vsx.org/extension/cyrusnewday/skill-language-server) — or `cmd-shift-x` → search _Agent Skills Language Server_. Same for Windsurf and anything else pointed at Open VSX. The extension bundles the server; nothing else to install.
 
 ### Zed
 
