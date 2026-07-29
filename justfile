@@ -1,5 +1,7 @@
 set shell := ["bash", "-cu"]
 
+owned_paths := ".changeset/config.json biome.jsonc ext package.json scripts src tests tsconfig.json"
+
 default: build
 
 # Build everything into dist/: server artifacts, VS Code .vsix, Zed wasm
@@ -44,7 +46,7 @@ bin: build-server
     cp dist/skill-language-server ~/.local/bin/skill-language-server
 
 test:
-    bun test --parallel
+    bun test --parallel tests
 
 bench:
     bun scripts/benchmark.ts
@@ -53,11 +55,11 @@ bench:
 check: && test
     bunx tsc --noEmit
     bunx tsc --noEmit -p ext/vscode
-    bunx ultracite check
+    bunx ultracite check {{owned_paths}}
 
 # Format + apply all lint fixes, including unsafe ones
 fmt:
-    bunx ultracite fix --unsafe
+    bunx ultracite fix --unsafe {{owned_paths}}
 
 # Declare a release: pick a bump type and write the changeset
 changeset:
