@@ -140,6 +140,7 @@ jobs:
 
           bun changeset version
           bun install --lockfile-only
+          just sync-vscode-version
           git add -A
 
           if git diff --cached --quiet; then

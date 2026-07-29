@@ -2,7 +2,7 @@
   "name": "skill-language-server",
   "displayName": "Agent Skills Language Server",
   "description": "Go-to-definition, find-references, completion, and cross-file rename for agent skills (SKILL.md)",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "publisher": "cyrusnewday",
   "license": "MIT",
   "icon": "icon.png",
