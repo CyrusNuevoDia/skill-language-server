@@ -8,11 +8,12 @@
 
 Your skill library now has tooling.
 
-▸ completion w/ descriptions on `/` and `$`\
-▸ "did you mean" on typos\
-▸ go to definition, find references\
-▸ F2 rename w/ editor undo — folder, frontmatter `name:`, and every reference update as one edit\
-▸ clickable links + semantic highlighting on resolved references
+- completion w/ descriptions on `/` and `$`, plus client-aware frontmatter fields + values
+- "did you mean" on typos; precise errors for frontmatter, names + unbalanced XML
+- go to definition, find references + hover w/ name, description + path
+- F2 rename w/ editor undo — folder, frontmatter `name:`, and every reference update as one edit
+- local Markdown skill links: navigate, rename + safe broken-link fixes
+- semantic highlighting on resolved references
 
 ## Why
 
