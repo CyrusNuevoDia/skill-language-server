@@ -1,10 +1,10 @@
 ## What this is
 
-An LSP server for agent skill files (`skills/<name>/SKILL.md`): go-to-definition,
-find-references, completion, diagnostics, and cross-file rename for `/skill-name`
-and `$skill-name` references. Rename is the flagship feature — one `WorkspaceEdit`
-renames the skill folder (`RenameFile`), the frontmatter `name:` value, and every
-reference across the workspace.
+An LSP server for agent skill files (`skills/<name>/SKILL.md`):
+go-to-definition, find-references, hover, completion, diagnostics, and
+cross-file rename for `/skill-name` and `$skill-name` references. Rename is the
+flagship feature — one `WorkspaceEdit` renames the skill folder (`RenameFile`),
+the frontmatter `name:` value, and every reference across the workspace.
 
 **The test suite is the contract.** Definition of done: `bun install` +
 `just check` all clean — run them, never grade from memory. Spec
@@ -44,22 +44,42 @@ globals — they ship to npm, the VS Code extension host, and Zed's Node);
 
 ## Architecture
 
-Three server modules in `src/`, each a layer:
+Server modules in `src/` are layered:
 
-- **parse.ts** — pure text → `{frontmatter, tokens}`. Owns the token grammar:
+- **schema.ts / completion.ts** — the checked-in skill-frontmatter
+  catalog and its completion projection. Every catalog variant records YAML
+  types, source, and client scope; finite values live there too. `.claude`
+  paths receive universal plus Claude fields, `.agents`/`.codex` receive only
+  universal fields, and generic `skills` paths receive scope-labelled
+  compatible candidates. Schema completion runs only at top-level key/value
+  positions in valid `SKILL.md` frontmatter, never repeats an existing key, and
+  always supplies an explicit prefix-only `textEdit`.
+- **parse.ts** — pure text → `{frontmatter, links, tokens}`. Owns the token grammar:
   `[/$]` + `[a-z0-9_]` segments joined by runs of `-` or `:` (separators may
-  repeat but never lead/trail), rejected when preceded by a word/path/scheme/home
-  char (`~` included, so `~/scripts` never matches) or followed by `/` (so
-  `/usr/bin`, `$PATH`, `https://x` never match). Fenced code blocks are skipped
-  with CommonMark pairing — only a closer with the same marker char and at
-  least the opening length ends a fence (a `~~~` line inside a ``` block is
+  repeat but never lead/trail), rejected when preceded by a
+  word/path/scheme/home/XML-close char (`~` included, so `~/scripts` never
+  matches; `<` included, so `</tag>` is not a skill reference) or followed by
+  `/` (so `/usr/bin`, `$PATH`, `https://x` never match). Fenced code blocks are
+  skipped with CommonMark pairing — only a closer with the same marker char and
+  at least the opening length ends a fence (a `~~~` line inside a ``` block is
   content); inline code spans are NOT (people write `` `/skill` `` in prose).
+  Inline Markdown links are represented separately from sigil tokens; images,
+  reference-style links, malformed links, and links inside fenced/inline code
+  are excluded, while escaped/nested punctuation and angle destinations retain
+  source-accurate destination ranges.
+  XML balance scanning supports nested and same-name tags, quoted/multiline
+  attributes, self-closing and void HTML elements, comments, CDATA, processing
+  instructions, and declarations. It skips fenced/inline code and Markdown
+  autolinks, and reports exact tag-name ranges with deterministic recovery from
+  mismatched nesting.
   Frontmatter delimiter and YAML semantics are gray-matter's: delimiters sit
   at column 0, and an indented `---` in a block scalar is content; fields are
-  salvaged per key, so one wrong-typed field
-  never erases the others; the `name:` range anchors to the YAML-parsed value
-  (quotes and trailing comments stay outside it) so diagnostics/renames target
-  it exactly.
+  parsed as YAML 1.1 nodes and salvaged per key, so malformed or wrong-typed
+  fields never erase independently usable ones. Source-backed key/value ranges
+  exclude value quotes and trailing comments. Structural diagnostics cover
+  missing/malformed/unclosed frontmatter, required/empty fields, duplicate
+  top-level keys, every client-applicable catalog field's YAML type, and name
+  syntax; the same parsed `name:` range remains the rename declaration target.
 - **workspace.ts** — the index. Walks the workspace once (`scan()`), keyed maps
   `files` (by URI) and `skills` (by name, array-valued to track duplicates).
   All disk I/O is async (`node:fs/promises`); only `indexFile` (pure text →
@@ -82,7 +102,12 @@ Three server modules in `src/`, each a layer:
   (edit distance ≤ 2) upgrade to _did you mean_ warnings; builtin CLI command
   names (`src/builtins.ts`) and workspace `.claude/commands`/`.codex/prompts`
   names are exempt from both; `$` tokens get near-miss warnings but never the
-  info hint.
+  info hint. Relative Markdown destinations resolve from their containing
+  file after percent-decoding and stripping query/fragment suffixes. Existing
+  files/directories are valid; missing local destinations are warnings.
+  Destination-resolved skill directories and `SKILL.md` files are explicit
+  `SkillReference` variants and join definition, references, highlighting, and
+  rename without collapsing their syntax into sigil tokens.
 - **server.ts** — LSP wiring only; no logic that isn't protocol shaped. Rename
   emits text edits BEFORE the folder `RenameFile` (clients apply sequentially;
   the frontmatter edit targets a file inside the folder being renamed).
@@ -92,6 +117,13 @@ Three server modules in `src/`, each a layer:
   map (per spec that's all it supports). Renaming to the current name is a
   no-op (`null`), never a self-`RenameFile`. `willRenameFiles` handles
   explorer-drag renames (returns compensating edits, no `RenameFile` echo).
+  Skill hover on declarations, sigil references, and destination-resolved
+  Markdown skill links shows the canonical name, valid non-empty description,
+  and workspace-relative `SKILL.md` path; declaration hover uses its own
+  duplicate while references use the first-indexed duplicate.
+  Broken-link quick fixes only correct exact case or one unique same-extension
+  sibling within edit distance 2; they preserve suffixes and never create
+  filesystem resources.
   Open buffers are authoritative over disk until `didClose`, which reverts to
   disk truth (an unsaved close leaves no watcher event). The watcher also
   registers `**/skills/*` because a recursive folder delete arrives as one
