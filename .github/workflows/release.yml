@@ -171,6 +171,15 @@ jobs:
           fi
           echo "published=true" >> "$GITHUB_OUTPUT"
           git push origin --tags || echo "::warning::Failed to push git tags for the published release."
+      - if: ${{ steps.publish.outputs.published == 'true' }}
+        name: release[github]
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create \
+            "skill-language-server@${{ steps.publish.outputs.version }}" \
+            --verify-tag \
+            --generate-notes
       - if: ${{ env.HAS_OVSX == 'true' }}
         name: publish[openvsx]
         env:
