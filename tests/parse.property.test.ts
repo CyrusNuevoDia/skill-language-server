@@ -1,18 +1,19 @@
 import { expect, test } from "bun:test"
+import { regex } from "arkregex"
 import fc from "fast-check"
-import { fullRange, NAME_PATTERN, parseDoc } from "@/parse"
-import { SkillName } from "@/workspace"
+import { SKILL_NAME_PATTERN, SkillName } from "@/grammar"
+import { fullRange, parseDoc } from "@/parse"
 import { joinName, segment, sepRun, sigil, skillName } from "./helpers/props"
 
-const NAME_RE = new RegExp(`^${NAME_PATTERN}$`)
+const NAME_RE = regex(`^${SKILL_NAME_PATTERN}$`)
 
-// Contexts chosen so the char before the sigil is never in BAD_PREV and the
-// char after the name never extends it (and is never `/`).
+// Contexts chosen so the char before the sigil is allowed by the reference
+// boundary grammar and the char after the name never extends it (or is `/`).
 const safePrefix = fc.constantFrom("", "Use ", "see (", "> ", '"', "* ")
 const safeSuffix = fc.constantFrom("", " next", ".", ") end", ", more", "!")
 
-// One representative per character category of BAD_PREV.
-const badPrev = fc.constantFrom(..."aZ0_$/:.~-")
+// One representative per disallowed preceding-character category.
+const badPrev = fc.constantFrom(..."aZ0_$/:.<~-")
 
 test("a sigil + valid name in a safe context yields exactly that token, slicing back to the text", () => {
   fc.assert(

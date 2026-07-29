@@ -22,6 +22,7 @@ import { skillName } from "./helpers/props"
 
 const c = await startClient()
 
+const LINK_SEGMENT_SEPARATOR = /[/?#]/
 const ORIGINS: RefSpec[] = [...SHIPPING_REFS, SHIPPING_DECL]
 const originArb = fc.constantFrom(...ORIGINS)
 // Prefixed so a generated name can never collide with a fixture skill.
@@ -106,10 +107,17 @@ test("applying the rename edits and re-parsing shows every reference renamed", a
         )
         const parsed = parseDoc(patched)
         const refsHere = SHIPPING_REFS.filter((s) => s.rel === rel).length
-        expect(parsed.tokens.filter((t) => t.name === newName)).toHaveLength(
-          refsHere
+        const renamedTokens = parsed.tokens.filter((t) => t.name === newName)
+        const renamedLinks = parsed.links.filter((link) =>
+          link.destination.split(LINK_SEGMENT_SEPARATOR).includes(newName)
         )
+        expect([...renamedTokens, ...renamedLinks]).toHaveLength(refsHere)
         expect(parsed.tokens.some((t) => t.name === "shipping")).toBe(false)
+        expect(
+          parsed.links.some((link) =>
+            link.destination.split(LINK_SEGMENT_SEPARATOR).includes("shipping")
+          )
+        ).toBe(false)
         if (rel === SHIPPING_DECL.rel) {
           expect(parsed.frontmatter?.name).toBe(newName)
         }

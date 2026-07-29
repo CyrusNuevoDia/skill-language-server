@@ -1,14 +1,17 @@
-import { basename, dirname, join } from "node:path"
+import { basename, dirname, join, relative, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 import { type } from "arktype"
 import { groupBy, mapValues, partition } from "es-toolkit"
 import {
+  type CodeAction,
+  CodeActionKind,
   CompletionItemKind,
   type Connection,
   type Diagnostic,
   DidChangeWatchedFilesNotification,
   type DocumentLink,
   FileChangeType,
+  type Hover,
   type InitializeParams,
   type Location,
   LSPErrorCodes,
@@ -21,9 +24,10 @@ import {
   type WorkspaceEdit,
 } from "vscode-languageserver"
 import { TextDocument } from "vscode-languageserver-textdocument"
-import { BAD_PREV, fullRange } from "@/parse"
+import { schemaCompletions } from "@/completion"
+import { REFERENCE_BAD_PREV, SkillName } from "@/grammar"
 import { pathOf, rangeIn, uriOf } from "@/utils"
-import { type Skill, SkillName, Workspace } from "@/workspace"
+import { type Skill, Workspace } from "@/workspace"
 
 const TYPED_PREFIX = /^[a-z0-9_:-]*$/
 
@@ -76,9 +80,11 @@ export function startServer(connection: Connection): void {
 
     return {
       capabilities: {
-        completionProvider: { triggerCharacters: ["/", "$"] },
+        codeActionProvider: true,
+        completionProvider: { triggerCharacters: ["/", "$", ":"] },
         definitionProvider: true,
         documentLinkProvider: {},
+        hoverProvider: true,
         referencesProvider: true,
         renameProvider: { prepareProvider: true },
         semanticTokensProvider: {
@@ -121,7 +127,7 @@ export function startServer(connection: Connection): void {
     }
     enqueue(async () => {
       await w.scan()
-      publishAll()
+      await publishAll()
     })
   })
 
@@ -141,7 +147,7 @@ export function startServer(connection: Connection): void {
         await rescanPreservingOpenBuffers()
       }
       // Duplicate/mismatch diagnostics depend on global state; republish all.
-      publishAll()
+      await publishAll()
     })
   })
 
@@ -206,11 +212,11 @@ export function startServer(connection: Connection): void {
     }
   }
 
-  function publishAll(): void {
+  async function publishAll(): Promise<void> {
     if (!ws) {
       return
     }
-    for (const [uri, diagnostics] of ws.diagnosticsByURI()) {
+    for (const [uri, diagnostics] of await ws.diagnosticsByURI()) {
       publish(uri, diagnostics)
     }
   }
@@ -220,13 +226,13 @@ export function startServer(connection: Connection): void {
     if (!w) {
       return
     }
-    enqueue(() => {
+    enqueue(async () => {
       const path = pathOf(document.uri)
       if (!(path && w.inScope(path))) {
         return
       }
       const entry = w.indexFile(path, document.getText())
-      publish(entry.uri, w.diagnosticsFor(entry))
+      publish(entry.uri, await w.diagnosticsForDocument(entry))
     })
   })
 
@@ -245,7 +251,7 @@ export function startServer(connection: Connection): void {
       if (!(await w.reindexPath(path))) {
         publish(document.uri, [])
       }
-      publishAll()
+      await publishAll()
     })
   })
 
@@ -254,9 +260,23 @@ export function startServer(connection: Connection): void {
     if (!ws) {
       return null
     }
-    const token = ws.tokenAt(textDocument.uri, position)
-    const skill = token && ws.skillOf(token.name)
+    const skill = ws.skillAt(textDocument.uri, position)
     return skill ? ws.definitionOf(skill) : null
+  })
+
+  connection.onHover(async ({ textDocument, position }) => {
+    await pending
+    if (!ws) {
+      return null
+    }
+    const reference = ws.referenceAt(textDocument.uri, position)
+    if (reference) {
+      const skill = ws.skillOf(reference.name)
+      return skill ? hoverOf(ws, skill, reference.range) : null
+    }
+    const declaration = ws.declAt(textDocument.uri, position)
+    const skill = declaration && ws.skillAt(textDocument.uri, position)
+    return skill ? hoverOf(ws, skill, declaration.range) : null
   })
 
   connection.languages.semanticTokens.on(async ({ textDocument }) => {
@@ -269,17 +289,16 @@ export function startServer(connection: Connection): void {
       return { data: [] }
     }
     const builder = new SemanticTokensBuilder()
-    for (const token of entry.tokens) {
-      if (ws.skillOf(token.name)) {
-        const { start, end } = fullRange(token)
-        builder.push(
-          start.line,
-          start.character,
-          end.character - start.character,
-          0,
-          0
-        )
-      }
+    for (const reference of ws.skillReferences(entry)) {
+      const { start, end } =
+        reference.kind === "sigil" ? reference.range : reference.nameRange
+      builder.push(
+        start.line,
+        start.character,
+        end.character - start.character,
+        0,
+        0
+      )
     }
     return builder.build()
   })
@@ -294,16 +313,49 @@ export function startServer(connection: Connection): void {
       return []
     }
     const links: DocumentLink[] = []
-    for (const token of entry.tokens) {
-      const skill = ws.skillOf(token.name)
+    for (const reference of ws.skillReferences(entry)) {
+      const skill = ws.skillOf(reference.name)
       if (skill) {
         links.push({
-          range: fullRange(token),
+          range: reference.range,
           target: uriOf(skill.skillFilePath),
         })
       }
     }
     return links
+  })
+
+  connection.onCodeAction(async ({ textDocument, context }) => {
+    await pending
+    if (!ws) {
+      return []
+    }
+    const actions = await Promise.all(
+      context.diagnostics
+        .filter((diagnostic) => diagnostic.code === "broken-markdown-link")
+        .map(async (diagnostic): Promise<CodeAction | null> => {
+          const repair = await ws?.repairForLinkDiagnostic(
+            textDocument.uri,
+            diagnostic.range
+          )
+          return repair
+            ? {
+                diagnostics: [diagnostic],
+                edit: {
+                  changes: {
+                    [textDocument.uri]: [
+                      { newText: repair.newText, range: repair.range },
+                    ],
+                  },
+                },
+                isPreferred: true,
+                kind: CodeActionKind.QuickFix,
+                title: repair.title,
+              }
+            : null
+        })
+    )
+    return actions.filter((action) => action !== null)
   })
 
   connection.onReferences(async ({ textDocument, position, context }) => {
@@ -332,9 +384,9 @@ export function startServer(connection: Connection): void {
     if (!ws) {
       return null
     }
-    const token = ws.tokenAt(textDocument.uri, position)
-    if (token && ws.skillOf(token.name)) {
-      return { placeholder: token.name, range: token.nameRange }
+    const reference = ws.referenceAt(textDocument.uri, position)
+    if (reference) {
+      return { placeholder: reference.name, range: reference.nameRange }
     }
     const decl = ws.declAt(textDocument.uri, position)
     return decl ? { placeholder: decl.name, range: decl.range } : null
@@ -423,6 +475,10 @@ export function startServer(connection: Connection): void {
     if (!(doc && path && ws.inScope(path))) {
       return null
     }
+    const schema = schemaCompletions(doc.getText(), path, position)
+    if (schema !== null) {
+      return schema
+    }
     if (ws.files.get(textDocument.uri)?.fenced.has(position.line)) {
       return null
     }
@@ -435,9 +491,9 @@ export function startServer(connection: Connection): void {
       return null
     }
     // Same boundary rule as the reference parser: a sigil preceded by a
-    // word/path char is a file path or shell var, not a skill reference.
+    // word/path/URI/shell/home/closing-tag char is not a skill reference.
     const before = sigilAt > 0 ? prefix[sigilAt - 1] : ""
-    if (before && BAD_PREV.test(before)) {
+    if (before && REFERENCE_BAD_PREV.test(before)) {
       return null
     }
     const typed = prefix.slice(sigilAt + 1)
@@ -466,6 +522,20 @@ export function startServer(connection: Connection): void {
 
   documents.listen(connection)
   connection.listen()
+}
+
+function hoverOf(ws: Workspace, skill: Skill, range: Hover["range"]): Hover {
+  const description = ws.entryOf(skill)?.frontmatter?.description?.trim()
+  const path = relative(ws.root, skill.skillFilePath).split(sep).join("/")
+  return {
+    contents: {
+      kind: "markdown",
+      value: [`**${skill.name}**`, description, `\`${path}\``]
+        .filter(Boolean)
+        .join("\n\n"),
+    },
+    range,
+  }
 }
 
 /** Every range to rewrite when renaming a skill: references plus the frontmatter name. */

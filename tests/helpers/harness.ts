@@ -7,6 +7,7 @@ import { sortBy } from "es-toolkit"
 import { createConnection } from "vscode-languageserver/node"
 import {
   type ClientCapabilities,
+  CodeActionRequest,
   type CompletionItem,
   type CompletionList,
   CompletionRequest,
@@ -15,8 +16,10 @@ import {
   DidCloseTextDocumentNotification,
   DidOpenTextDocumentNotification,
   DocumentLinkRequest,
+  HoverRequest,
   InitializedNotification,
   InitializeRequest,
+  type InitializeResult,
   type Location,
   type LocationLink,
   type Position,
@@ -43,6 +46,7 @@ export const WORKSPACE = resolve(import.meta.dir, "..", "fixtures", "workspace")
 
 export const DEFAULT_CAPABILITIES: ClientCapabilities = {
   textDocument: {
+    codeAction: {},
     completion: {
       completionItem: { documentationFormat: ["markdown", "plaintext"] },
     },
@@ -112,6 +116,7 @@ export class Client {
   readonly publishLog: { uri: string; diagnostics: Diagnostic[] }[] = []
   readonly conn: ProtocolConnection
   readonly root: string
+  serverCapabilities: InitializeResult["capabilities"] = {}
 
   private constructor(conn: ProtocolConnection, root: string) {
     this.conn = conn
@@ -144,12 +149,13 @@ export class Client {
     conn.listen()
 
     const rootUri = pathToFileURL(root).toString()
-    await conn.sendRequest(InitializeRequest.type, {
+    const initializeResult = await conn.sendRequest(InitializeRequest.type, {
       capabilities,
       processId: null,
       rootUri,
       workspaceFolders: [{ name: "fixture", uri: rootUri }],
     })
+    client.serverCapabilities = initializeResult.capabilities
     await conn.sendNotification(InitializedNotification.type, {})
     return client
   }
@@ -190,6 +196,21 @@ export class Client {
 
   documentLinks(rel: string) {
     return this.conn.sendRequest(DocumentLinkRequest.type, {
+      textDocument: { uri: this.uriFor(rel) },
+    })
+  }
+
+  codeActions(rel: string, range: Range, diagnostics: Diagnostic[]) {
+    return this.conn.sendRequest(CodeActionRequest.type, {
+      context: { diagnostics },
+      range,
+      textDocument: { uri: this.uriFor(rel) },
+    })
+  }
+
+  hover(rel: string, position: Position) {
+    return this.conn.sendRequest(HoverRequest.type, {
+      position,
       textDocument: { uri: this.uriFor(rel) },
     })
   }

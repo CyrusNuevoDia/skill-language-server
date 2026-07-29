@@ -54,7 +54,10 @@ test("a wrong-typed frontmatter field does not erase the well-typed name", async
     SHIPPING,
     "---\nname: shipping\ndescription: 42\n---\n"
   )
-  expect(diags).toBeUndefined()
+  expect(diags?.some((d) => String(d.message).includes("description"))).toBe(
+    true
+  )
+  expect(diags?.some((d) => String(d.message).includes("name"))).toBe(false)
   await c.close(SHIPPING)
 })
 
@@ -63,7 +66,7 @@ test("tokens inside frontmatter are never scanned", async () => {
     SHIPPING,
     "---\nname: shipping\ndescription: /qqzzqq\n---\n"
   )
-  expect(diags).toBeUndefined()
+  expect(diags).toEqual([])
   await c.close(SHIPPING)
 })
 
@@ -74,12 +77,15 @@ test("empty frontmatter yields no fields and scanning resumes after it", async (
   await c.close(SHIPPING)
 })
 
-test("malformed YAML frontmatter is token-scanned as body", async () => {
+test("malformed YAML frontmatter is diagnosed without scanning its values as body tokens", async () => {
   const diags = await diagnosticsWith(
     SHIPPING,
     "---\nname: [unclosed\ndescription: /qqzzqq\n---\n"
   )
-  expect(diags?.some((d) => String(d.message).includes("qqzzqq"))).toBe(true)
+  expect(diags?.some((d) => String(d.message).includes("Malformed YAML"))).toBe(
+    true
+  )
+  expect(diags?.some((d) => String(d.message).includes("qqzzqq"))).toBe(false)
   await c.close(SHIPPING)
 })
 
