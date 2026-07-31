@@ -1,0 +1,4 @@
+interface:
+  display_name: "Analytics"
+  short_description: "Track downloads across extension channels"
+  default_prompt: "Use $analytics to show the latest download pulse with charts and tables."
