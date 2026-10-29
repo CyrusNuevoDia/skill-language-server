@@ -8,7 +8,7 @@
 
 Rename agent skills without leaving stale references.
 
-Use your editor's **Rename Symbol** action on `/ship` or `$ship` and enter `release` (`F2` in VS Code). The server updates the skill folder, its frontmatter, and references throughout the workspace in one undoable edit:
+Use your editor's **Rename Symbol** action on `/ship` or `$ship` and enter `release` (`F2` in Cursor or VS Code). The server updates the skill folder, its frontmatter, and references throughout the workspace together:
 
 | Before | After |
 | --- | --- |
@@ -130,6 +130,7 @@ Cross-workspace renames are a deliberate two-step: rename where the skill lives,
 Checked against client source as of 2026-07: VS Code, Zed, Helix, and Neovim all apply the folder `RenameFile`.
 
 - Neovim never sends `willRenameFiles` — explorer-drag renames don't rewrite references there; rename from a token or the frontmatter instead
+- In Zed Preview 1.27.0, Undo restores the text edits but leaves the folder renamed; restore the folder name manually after undoing
 - File watching: VS Code and Zed yes; Neovim yes except off by default on Linux; Helix only sees its own edits — reopen the file or restart the server after external changes
 
 ## Development
