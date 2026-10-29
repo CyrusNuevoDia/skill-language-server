@@ -4,6 +4,15 @@ use zed_extension_api::{self as zed, Result};
 const PACKAGE_NAME: &str = "skill-language-server";
 const SERVER_SCRIPT: &str = "node_modules/skill-language-server/dist/main.cjs";
 
+// None means the installed server is usable without a registry response.
+fn registry_version(latest_version: Result<String>, server_exists: bool) -> Result<Option<String>> {
+    match latest_version {
+        Ok(version) => Ok(Some(version)),
+        Err(_) if server_exists => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
 struct SkillLanguageServerExtension {
     did_find_server: bool,
 }
@@ -23,28 +32,30 @@ impl SkillLanguageServerExtension {
             language_server_id,
             &zed::LanguageServerInstallationStatus::CheckingForUpdate,
         );
-        let latest_version = zed::npm_package_latest_version(PACKAGE_NAME)?;
-
-        if !server_exists
-            || zed::npm_package_installed_version(PACKAGE_NAME)?.as_deref()
-                != Some(latest_version.as_str())
+        if let Some(latest_version) =
+            registry_version(zed::npm_package_latest_version(PACKAGE_NAME), server_exists)?
         {
-            zed::set_language_server_installation_status(
-                language_server_id,
-                &zed::LanguageServerInstallationStatus::Downloading,
-            );
-            match zed::npm_install_package(PACKAGE_NAME, &latest_version) {
-                Ok(()) => {
-                    if !self.server_exists() {
-                        Err(format!(
-                            "installed package '{PACKAGE_NAME}' did not contain expected path '{SERVER_SCRIPT}'"
-                        ))?;
+            if !server_exists
+                || zed::npm_package_installed_version(PACKAGE_NAME)?.as_deref()
+                    != Some(latest_version.as_str())
+            {
+                zed::set_language_server_installation_status(
+                    language_server_id,
+                    &zed::LanguageServerInstallationStatus::Downloading,
+                );
+                match zed::npm_install_package(PACKAGE_NAME, &latest_version) {
+                    Ok(()) => {
+                        if !self.server_exists() {
+                            Err(format!(
+                                "installed package '{PACKAGE_NAME}' did not contain expected path '{SERVER_SCRIPT}'"
+                            ))?;
+                        }
                     }
-                }
-                // A failed update is fine as long as a previous install still exists.
-                Err(error) => {
-                    if !self.server_exists() {
-                        Err(error)?;
+                    // A failed update is fine as long as a previous install still exists.
+                    Err(error) => {
+                        if !self.server_exists() {
+                            Err(error)?;
+                        }
                     }
                 }
             }
@@ -93,3 +104,31 @@ impl zed::Extension for SkillLanguageServerExtension {
 }
 
 zed::register_extension!(SkillLanguageServerExtension);
+
+#[cfg(test)]
+mod tests {
+    use super::registry_version;
+
+    #[test]
+    fn cached_server_survives_registry_failure() {
+        assert_eq!(registry_version(Err("offline".into()), true), Ok(None));
+    }
+
+    #[test]
+    fn missing_server_preserves_registry_error() {
+        assert_eq!(
+            registry_version(Err("offline".into()), false),
+            Err("offline".into())
+        );
+    }
+
+    #[test]
+    fn successful_lookup_keeps_updates_enabled() {
+        for server_exists in [false, true] {
+            assert_eq!(
+                registry_version(Ok("0.8.1".into()), server_exists),
+                Ok(Some("0.8.1".into()))
+            );
+        }
+    }
+}

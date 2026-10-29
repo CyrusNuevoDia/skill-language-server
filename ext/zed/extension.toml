@@ -1,6 +1,6 @@
 id = "skill-language-server"
 name = "Skill Language Server"
-version = "0.0.1"
+version = "0.0.2"
 schema_version = 1
 authors = ["Cyrus <knouroozi@gmail.com>"]
 description = "Go-to-definition, find-references, and cross-file rename for agent skill files (SKILL.md)"
