@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test"
 import { regex } from "arkregex"
 import fc from "fast-check"
+import { parse as parseYAML } from "yaml"
 import { SKILL_NAME_PATTERN, SkillName } from "@/grammar"
 import { fullRange, parseDoc } from "@/parse"
 import { joinName, segment, sepRun, sigil, skillName } from "./helpers/props"
@@ -178,20 +179,8 @@ test("every token parsed from arbitrary text matches the grammar and slices back
   )
 })
 
-// YAML 1.1 (js-yaml via gray-matter) parses these words — and any scalar
-// starting with a digit (0x1f, 1_000, 1:2:3) — as non-strings, so declared
-// names start with a letter and skip the word list.
-const YAML_WORDS = new Set([
-  "true",
-  "false",
-  "yes",
-  "no",
-  "on",
-  "off",
-  "null",
-  "y",
-  "n",
-])
+// The range property requires string-valued YAML. Even letter-leading skill
+// names can resolve as another scalar type under the configured YAML 1.1 schema.
 const letterSegment = fc
   .tuple(
     fc.constantFrom(..."abcdefghijklmnopqrstuvwxyz"),
@@ -205,7 +194,7 @@ const declaredName = fc.oneof(
   fc
     .tuple(letterSegment, fc.array(fc.tuple(sepRun, segment), { maxLength: 3 }))
     .map(joinName)
-    .filter((name) => !YAML_WORDS.has(name)),
+    .filter((name) => typeof parseYAML(name, { version: "1.1" }) === "string"),
   // Values that also occur inside the literal text "name:" — the anchor must
   // still land after the key, never inside it.
   fc.constantFrom("name", "a", "e", "na", "am")
