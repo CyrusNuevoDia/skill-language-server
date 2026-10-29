@@ -1,5 +1,19 @@
 # skill-language-server
 
+## 0.8.1
+
+### Patch Changes
+
+- [`72389a2`](https://github.com/CyrusNuevoDia/skill-language-server/commit/72389a2a2ec70b7c6ad8fc36802fa67d953d9586) Thanks [@CyrusNuevoDia](https://github.com/CyrusNuevoDia)! - Show the complete skill rename in the install pages, add global-library first-use instructions, and include Codex in package search keywords.
+
+- [`e3e2b0a`](https://github.com/CyrusNuevoDia/skill-language-server/commit/e3e2b0a8edee816c90b9b7bc9061c31223f0b458) Thanks [@CyrusNuevoDia](https://github.com/CyrusNuevoDia)! - Scan directory entries in name order so duplicate skill references consistently resolve to the first-indexed definition across filesystems and operating systems.
+
+- [`ce9df36`](https://github.com/CyrusNuevoDia/skill-language-server/commit/ce9df36f97e098d8268baa3d2d2cbc780dde2c11) Thanks [@CyrusNuevoDia](https://github.com/CyrusNuevoDia)! - Keep references in scope when opening a global agent directory or a skill folder as the workspace. Index skills named build, dist, and node_modules while continuing to skip ordinary artifact directories.
+
+- [`e012a4c`](https://github.com/CyrusNuevoDia/skill-language-server/commit/e012a4ca26692b18ad170dbe1abbb45d7652cbf0) Thanks [@CyrusNuevoDia](https://github.com/CyrusNuevoDia)! - Discover a skill and its Markdown references when an editor reports only a folder-created event after moving or installing it. Preserve unsaved buffers and workspace ignore rules during the refresh.
+
+- [`a06b7e8`](https://github.com/CyrusNuevoDia/skill-language-server/commit/a06b7e87351da6d6879f70576ff26be74051130b) Thanks [@CyrusNuevoDia](https://github.com/CyrusNuevoDia)! - Keep Zed's installed server available when the npm version check fails, including while offline. A first installation still reports the registry error when no cached server exists.
+
 ## 0.8.0
 
 ### Minor Changes
