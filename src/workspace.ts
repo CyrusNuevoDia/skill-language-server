@@ -138,6 +138,10 @@ export class Workspace {
       return false
     }
     return (
+      // A scope root or directly opened skill retains its scope. More distant
+      // ancestors can be containers such as ~/.codex/worktrees, not libraries.
+      SCAN_SEGMENTS.has(basename(this.root)) ||
+      basename(dirname(this.root)) === "skills" ||
       segments.some((seg) => SCAN_SEGMENTS.has(seg)) ||
       SCAN_BASENAMES.has(basename(path))
     )
@@ -918,7 +922,10 @@ async function* walk(
     const path = join(dir, e.name)
     // biome-ignore lint/performance/noAwaitInLoops: the ancestor-chain cycle guard requires sequential depth-first order
     const kind = await kindOf(e, path)
-    if (kind === DirKind && !SKIP_DIRS.has(e.name)) {
+    // A skill named build/dist/node_modules is source, not an artifact.
+    // Git metadata remains excluded even directly beneath skills/.
+    const isSkillFolder = basename(dir) === "skills" && e.name !== ".git"
+    if (kind === DirKind && (isSkillFolder || !SKIP_DIRS.has(e.name))) {
       yield* walk(path, ancestors)
     } else if (kind === FileKind) {
       yield path
