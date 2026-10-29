@@ -12,7 +12,7 @@ import {
 } from "node:path"
 import { fileURLToPath } from "node:url"
 import { regex } from "arkregex"
-import { attemptAsync } from "es-toolkit"
+import { attemptAsync, sortBy } from "es-toolkit"
 import ignore, { type Ignore } from "ignore"
 import {
   type Diagnostic,
@@ -918,7 +918,9 @@ async function* walk(
     return
   }
   ancestors.add(real)
-  for (const e of entries) {
+  // Filesystem enumeration order differs across platforms. Stable traversal
+  // keeps the first-indexed duplicate consistent in every editor and OS.
+  for (const e of sortBy(entries, [(entry) => entry.name])) {
     const path = join(dir, e.name)
     // biome-ignore lint/performance/noAwaitInLoops: the ancestor-chain cycle guard requires sequential depth-first order
     const kind = await kindOf(e, path)
