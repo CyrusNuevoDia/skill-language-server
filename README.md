@@ -6,14 +6,20 @@
 [![Zed](https://img.shields.io/badge/Zed-extension-084CCF)](https://zed.dev/extensions/skill-language-server)
 [![CI](https://github.com/CyrusNuevoDia/skill-language-server/actions/workflows/ci.yml/badge.svg)](https://github.com/CyrusNuevoDia/skill-language-server/actions/workflows/ci.yml)
 
-Your skill library now has tooling.
+Rename agent skills without leaving stale references.
 
-- completion w/ descriptions on `/` and `$`, plus client-aware frontmatter fields + values
-- "did you mean" on typos; precise errors for frontmatter, names + unbalanced XML
-- go to definition, find references + hover w/ name, description + path
-- F2 rename w/ editor undo — folder, frontmatter `name:`, and every reference update as one edit
-- local Markdown skill links: navigate, rename + safe broken-link fixes
-- semantic highlighting on resolved references
+Use your editor's **Rename Symbol** action on `/ship` or `$ship` and enter `release` (`F2` in VS Code). The server updates the skill folder, its frontmatter, and references throughout the workspace in one undoable edit:
+
+| Before | After |
+| --- | --- |
+| `skills/ship/SKILL.md` | `skills/release/SKILL.md` |
+| `name: ship` | `name: release` |
+| `Run /ship after $review.` | `Run /release after $review.` |
+| `[Ship](skills/ship/SKILL.md)` | `[Ship](skills/release/SKILL.md)` |
+
+For Claude Code, Codex, and other agents that use `SKILL.md`. Install for [VS Code](https://marketplace.visualstudio.com/items?itemName=cyrusnewday.skill-language-server), [Cursor / Windsurf / Antigravity / VSCodium](https://open-vsx.org/extension/cyrusnewday/skill-language-server), [Zed](https://zed.dev/extensions/skill-language-server), [Neovim](#neovim-011), or [Helix](#helix).
+
+You also get completion with skill descriptions, go to definition, find references, hover, typo suggestions, and semantic highlighting. Frontmatter completion follows the agent's supported fields; diagnostics catch invalid frontmatter, unbalanced XML, and broken local Markdown links.
 
 ## Why
 
@@ -32,7 +38,7 @@ It's a language server, not a linter — pair with `skill-lint` or `agnix` for s
 
 [Cursor / Antigravity / VSCodium](#cursor--antigravity--vscodium) · [Zed](#zed) · [VS Code](#vs-code) · [Neovim](#neovim-011) · [Helix](#helix) · [from source](#from-source)
 
-Once installed: cursor on any `/skill-name`, hit `F2`, type a new name — folder, frontmatter, and every reference update as one undo step.
+Open a folder containing your skills and a `CLAUDE.md` or `AGENTS.md` that references them. Use **Go to Definition** on a reference to jump to its skill, or **Rename Symbol** to rename it. For a global library, open `~/.claude`, `~/.agents`, or `~/.codex` as the workspace.
 
 ### Cursor / Antigravity / VSCodium
 
@@ -104,7 +110,7 @@ For the VS Code–family editors, build and sideload the extension instead:
 
 ```sh
 just build-vscode
-code --install-extension dist/skill-language-server.vsix   # or cursor / codium / …
+cursor --install-extension dist/skill-language-server.vsix   # or code / codium / …
 ```
 
 ## How it scans

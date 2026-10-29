@@ -25,8 +25,8 @@ Tools come from mise (`mise trust && mise install` on first checkout).
 
 Verifier = `bun install` + `just check` all clean. Run it before
 declaring anything done. After server changes, refresh installed clients:
-`just bin` (Zed) and `just build && code --install-extension dist/skill-language-server.vsix`
-(VS Code).
+`just bin` (Zed) and `just build && cursor --install-extension dist/skill-language-server.vsix`
+(Cursor). Use Cursor for native verification of the VS Code-family extension.
 
 TypeScript is v7 (native compiler): `@types/*` packages must be listed
 explicitly in each tsconfig's `"types"` field — they are not auto-discovered.

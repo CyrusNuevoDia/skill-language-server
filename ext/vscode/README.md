@@ -1,14 +1,21 @@
 # Agent Skills Language Server
 
-`/skill-name` and `$skill-name` become real symbols — in Cursor, Antigravity, VSCodium, Windsurf, and VS Code.
+Rename agent skills without leaving stale references — in VS Code, Cursor, Windsurf, Antigravity, and VSCodium. Works with Claude Code, Codex, and other agents that use `SKILL.md`. The server is bundled; nothing else to install.
 
-▸ completion w/ descriptions on `/` and `$`\
-▸ "did you mean" on typos\
-▸ go to definition, find references\
-▸ F2 rename w/ editor undo — folder, frontmatter `name:`, and every reference update as one edit\
-▸ clickable links + semantic highlighting on resolved references
+## Try a rename
 
-Your skill library now has tooling. Nothing else to install — the server is bundled.
+Open a folder containing your skill library, then press `F2` on `/ship` or `$ship` and enter `release`:
+
+| Before | After |
+| --- | --- |
+| `skills/ship/SKILL.md` | `skills/release/SKILL.md` |
+| `name: ship` | `name: release` |
+| `Run /ship after $review.` | `Run /release after $review.` |
+| `[Ship](skills/ship/SKILL.md)` | `[Ship](skills/release/SKILL.md)` |
+
+The changes apply together and undo together. Use `F12` on a reference to jump to its skill, or **Find All References** to see where it's used. For a global library, open `~/.claude`, `~/.agents`, or `~/.codex` as the workspace.
+
+Completion includes skill descriptions and client-aware frontmatter fields. You also get hover, typo suggestions, semantic highlighting, and diagnostics for invalid frontmatter, unbalanced XML, and broken local Markdown links.
 
 ## Why
 
