@@ -1,5 +1,11 @@
 # skill-language-server
 
+## 0.8.2
+
+### Patch Changes
+
+- [`399ecfe`](https://github.com/CyrusNuevoDia/skill-language-server/commit/399ecfe0cd328245d5652855dbcedcfa0a013225) Thanks [@CyrusNuevoDia](https://github.com/CyrusNuevoDia)! - Clarify the observed Zed Preview undo limitation: text edits revert, but the renamed skill folder must be restored manually. Describe cross-editor rename without promising universal undo behavior.
+
 ## 0.8.1
 
 ### Patch Changes
