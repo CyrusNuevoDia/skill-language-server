@@ -27,6 +27,8 @@ import {
   PublishDiagnosticsNotification,
   type Range,
   ReferencesRequest,
+  type Registration,
+  RegistrationRequest,
   type RenameFile,
   RenameRequest,
   SemanticTokensRequest,
@@ -112,6 +114,7 @@ export function rangeOf(
 
 export class Client {
   readonly diagnostics = new Map<string, Diagnostic[]>()
+  readonly registrations: Registration[] = []
   /** Every publishDiagnostics notification received, in arrival order. */
   readonly publishLog: { uri: string; diagnostics: Diagnostic[] }[] = []
   readonly conn: ProtocolConnection
@@ -142,6 +145,9 @@ export class Client {
       new StreamMessageWriter(clientToServer)
     )
     const client = new Client(conn, root)
+    conn.onRequest(RegistrationRequest.type, ({ registrations }) => {
+      client.registrations.push(...registrations)
+    })
     conn.onNotification(PublishDiagnosticsNotification.type, (p) => {
       client.diagnostics.set(p.uri, p.diagnostics)
       client.publishLog.push({ diagnostics: p.diagnostics, uri: p.uri })

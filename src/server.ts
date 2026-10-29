@@ -119,6 +119,8 @@ export function startServer(connection: Connection): void {
             // Folder deletes arrive as one event for the folder itself,
             // which **/*.md never matches.
             { globPattern: "**/skills/*" },
+            // Globs are workspace-relative when skills/ itself is the root.
+            ...(basename(w.root) === "skills" ? [{ globPattern: "*" }] : []),
           ],
         })
         .catch(() => {
@@ -135,15 +137,15 @@ export function startServer(connection: Connection): void {
     if (!ws) {
       return
     }
-    const [ignoreChanges, fileChanges] = partition(changes, (c) =>
-      isSkillignore(c.uri)
+    const [rescanChanges, fileChanges] = partition(changes, (c) =>
+      requiresRescan(c.type, c.uri)
     )
     enqueue(async () => {
       for (const change of fileChanges) {
         // biome-ignore lint/performance/noAwaitInLoops: changes must apply in arrival order
         await applyWatchedChange(change.type, change.uri)
       }
-      if (ignoreChanges.length > 0) {
+      if (rescanChanges.length > 0) {
         await rescanPreservingOpenBuffers()
       }
       // Duplicate/mismatch diagnostics depend on global state; republish all.
@@ -151,9 +153,17 @@ export function startServer(connection: Connection): void {
     })
   })
 
-  function isSkillignore(uri: string): boolean {
+  function requiresRescan(change: FileChangeType, uri: string): boolean {
     const path = pathOf(uri)
-    return path !== null && basename(path) === ".skillignore"
+    return (
+      path !== null &&
+      (basename(path) === ".skillignore" ||
+        // A moved or installed skill can arrive as one folder event, with no
+        // child .md events. Rescan once for the batch, retaining dirty buffers.
+        (change === FileChangeType.Created &&
+          basename(dirname(path)) === "skills" &&
+          ws?.inScope(path) === true))
+    )
   }
 
   async function applyWatchedChange(
@@ -183,7 +193,11 @@ export function startServer(connection: Connection): void {
           publish(removed.uri, [])
         }
       }
-    } else if (ws.inScope(path) && !(await ws.reindexPath(path))) {
+    } else if (
+      path.endsWith(".md") &&
+      ws.inScope(path) &&
+      !(await ws.reindexPath(path))
+    ) {
       // Unreadable now (replaced by a directory, permissions): clear its
       // published diagnostics along with the index entry.
       publish(uri, [])
