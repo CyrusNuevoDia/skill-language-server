@@ -159,3 +159,5 @@ Distribution targets in `ext/` (thin shims around the same server):
   dev extension via `zed: install dev extension`.
 - `ext/nvim/` — plain Lua plugin for Neovim 0.11+ (`lsp/skill-language-server.lua` +
   `vim.lsp.enable`); expects the `just bin` binary on PATH.
+
+This codebase is yours: what it's for and how it's built are your call, and you'll keep building on it.
